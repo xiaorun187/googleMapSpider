@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import json
 import sys
 import io
@@ -409,4 +412,5 @@ def proxy_gemini_api():
         # 处理其他未知错误
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0', port=5001, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=True)

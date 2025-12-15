@@ -1,14 +1,13 @@
-version: '3.8'
-
 services:
   flask-app:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "5000:5000"  # 映射宿主机的 5000 端口到容器的 5000 端口
+      - "8088:5000"  # 映射宿主机的 8088 端口到容器的 5000 端口
     volumes:
       - ./output:/app/output  # 映射 output 目录，以便持久化 CSV 文件
     environment:
       - FLASK_ENV=development  # 启用 Flask 开发模式（调试）
+      - PORT=5000 # 明确告诉容器内应用监听 5000
     restart: unless-stopped  # 容器意外退出时自动重启

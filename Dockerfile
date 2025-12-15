@@ -37,6 +37,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 \
     libgcc-s1 \
     libglib2.0-0 \
+    libdbus-1-3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libgbm1 \
+    libxkbcommon0 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 # 下载并安装 Chrome 134.0.6998.165（linux64）
@@ -66,5 +76,8 @@ ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
 # 暴露 Flask 端口
 EXPOSE 5000
 
-# 运行 Flask 应用
-CMD ["python", "google_maps_extractor.py"]
+# 设置 Flask 端口变量 (app.py 会读取此变量)
+ENV PORT=5000
+
+# 运行 Flask 应用 (使用 Gunicorn + Eventlet)
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "-b", "0.0.0.0:5000", "--timeout", "120", "app:app"]

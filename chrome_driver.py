@@ -4,7 +4,9 @@ import sys
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from config import CHROME_BINARY, CHROMEDRIVER_PATH, OUTPUT_DIR
+
 
 def create_proxy_auth_extension(proxy_host, proxy_port, username, password):
     manifest_json = """
@@ -66,20 +68,22 @@ def create_proxy_auth_extension(proxy_host, proxy_port, username, password):
 
 def get_chrome_driver(proxy=None):
     chrome_options = Options()
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Safari/537.36")
+    # 常用配置
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
     chrome_options.add_argument("window-size=1920,3000")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--headless")
+    # chrome_options.add_argument("--headless") # 本地调试可注释掉，看效果
+    chrome_options.add_argument("--headless=new") # 推荐使用新版 headless 模式
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--ignore-certificate-errors")
-    chrome_options.add_argument("--disable-webgl")  # 禁用 WebGL
-    chrome_options.add_argument("--disable-accelerated-2d-canvas")  # 禁用 2D 加速
-    chrome_options.add_argument("--disable-accelerated-video-decode")  # 禁用视频解码加速
-    chrome_options.binary_location = CHROME_BINARY
-
+    chrome_options.add_argument("--disable-webgl")
+    
+    # 显式指定 Chrome 二进制位置 (config.py 中已适配 Mac/Linux/Windows)
+    if CHROME_BINARY and os.path.exists(CHROME_BINARY):
+        chrome_options.binary_location = CHROME_BINARY
+    
     proxy_info = None
     if proxy:
         if '@' in proxy:
@@ -99,6 +103,22 @@ def get_chrome_driver(proxy=None):
             proxy_info = f"应用无认证代理: {proxy}"
             print(proxy_info)
 
-    service_obj = Service(CHROMEDRIVER_PATH)
-    driver = webdriver.Chrome(service=service_obj, options=chrome_options)
-    return driver, proxy_info
+    # 优先使用配置的 ChromeDriver (Docker 环境或手动指定)
+    if CHROMEDRIVER_PATH and os.path.exists(CHROMEDRIVER_PATH):
+        try:
+            print(f"使用本地 ChromeDriver: {CHROMEDRIVER_PATH}")
+            service_obj = Service(CHROMEDRIVER_PATH)
+            driver = webdriver.Chrome(service=service_obj, options=chrome_options)
+            return driver, proxy_info
+        except Exception as e:
+            print(f"本地 ChromeDriver 启动失败，尝试使用 webdriver-manager: {e}")
+
+    # 回退到 webdriver-manager 自动管理
+    try:
+        print("使用 webdriver-manager 自动下载驱动...")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        return driver, proxy_info
+    except Exception as e:
+        print(f"Failed to initialize ChromeDriver: {e}")
+        raise
