@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>History</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        #column-toggles {
+            max-width: 95%;
+            margin: 0 auto 10px;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
+            text-align: left;
+        }
+        #column-toggles label {
+            margin-right: 15px;
+            font-size: 0.9em;
+            color: #777;
+        }
+        #column-toggles input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        #search-form {
+            max-width: 600px;
+            margin: 0 auto 20px;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #search-form input[type="text"] {
+            padding: 8px;
+            width: 50%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #search-form select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #search-form button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #search-form button:hover {
+            background-color: #0056b3;
+        }
+        #history-table {
+            width: 95%;
+            max-width: 1600px; /* Increased to accommodate wider columns */
+            margin: 0 auto;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow-x: auto;
+            table-layout: fixed;
+            border: 1px solid #ccc;
+        }
+        #history-table th, #history-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 250px; /* Increased from 200px */
+            width: 250px; /* Explicit width for consistency */
+            border-right: 1px solid #eee;
+        }
+        #history-table th:nth-child(5),
+        #history-table td:nth-child(5) {
+            max-width: 350px; /* Increased from 300px for Email column */
+            width: 350px; /* Explicit width for consistency */
+        }
+        #history-table th {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            cursor: col-resize;
+        }
+        #history-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        #history-table tr:hover {
+            background-color: #f1f1f1;
+        }
+        #pagination {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #pagination button, #send-selected-btn, #export-excel-btn {
+            padding: 8px 16px;
+            margin: 0 5px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #pagination button:hover, #send-selected-btn:hover, #export-excel-btn:hover {
+            background-color: #0056b3;
+        }
+        #pagination button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .twitter-column,
+        .instagram-column,
+        .linkedin-column,
+        .whatsapp-column,
+        .youtube-column {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>History Records</h1>
+
+    <div id="column-toggles">
+        <label><input type="checkbox" id="toggle-twitter"> Twitter</label>
+        <label><input type="checkbox" id="toggle-instagram"> Instagram</label>
+        <label><input type="checkbox" id="toggle-linkedin"> LinkedIn</label>
+        <label><input type="checkbox" id="toggle-whatsapp"> WhatsApp</label>
+        <label><input type="checkbox" id="toggle-youtube"> YouTube</label>
+    </div>
+
+    <form id="search-form">
+        <input type="text" id="search-query" placeholder="Search by name or email">
+        <select id="page-size">
+            <option value="10">10 per page</option>
+            <option value="20">20 per page</option>
+            <option value="50">50 per page</option>
+            <option value="100">100 per page</option>
+        </select>
+        <label><input type="checkbox" id="show-empty-email"> Show empty emails</label>
+        <button type="submit">Search</button>
+    </form>
+    <table id="history-table">
+        <thead>
+            <tr>
+                <th><input type="checkbox" id="select-all"></th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Website</th>
+                <th>Email</th>
+                <th>Phones</th>
+                <th class="twitter-column">Facebook</th>
+                <th class="instagram-column">Twitter</th>
+                <th class="linkedin-column">Instagram</th>
+                <th class="whatsapp-column">LinkedIn</th>
+                <th class="youtube-column">WhatsApp</th>
+                <th class="youtube-column">YouTube</th>
+                <th>Send Count</th>
+                <th>Updated At</th>
+                <th>Created At</th>
+            </tr>
+        </thead>
+        <tbody id="history-table-body">
+        </tbody>
+    </table>
+    <div id="pagination">
+        <button id="prev-btn">Previous</button>
+        <span id="page-info"></span>
+        <button id="next-btn">Next</button>
+        <button id="send-selected-btn">Send Selected Emails</button>
+        <button id="export-excel-btn">Export to Excel</button>
+    </div>
+
+    <script>
+        const searchForm = document.getElementById('search-form');
+        const historyTable = document.getElementById('history-table');
+        const historyTableBody = document.getElementById('history-table-body');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const pageInfo = document.getElementById('page-info');
+        const selectAllCheckbox = document.getElementById('select-all');
+        const sendSelectedBtn = document.getElementById('send-selected-btn');
+        const pageSizeSelect = document.getElementById('page-size');
+        const showEmptyEmailCheckbox = document.getElementById('show-empty-email');
+        const exportExcelBtn = document.getElementById('export-excel-btn');
+
+        const toggleTwitter = document.getElementById('toggle-twitter');
+        const toggleInstagram = document.getElementById('toggle-instagram');
+        const toggleLinkedin = document.getElementById('toggle-linkedin');
+        const toggleWhatsapp = document.getElementById('toggle-whatsapp');
+        const toggleYoutube = document.getElementById('toggle-youtube');
+
+        let currentPage = 1;
+        let pageSize = parseInt(pageSizeSelect.value);
+        let showEmptyEmail = false;
+
+        function formatField(value) {
+            if (value && value.startsWith('http')) {
+                return `<a href="${value}" target="_blank">${value}</a>`;
+            }
+            return value || 'N/A';
+        }
+
+        function formatDateTime(utcDateStr) {
+            if (!utcDateStr || utcDateStr === 'N/A') return 'N/A';
+            const date = new Date(utcDateStr);
+            if (isNaN(date.getTime())) return 'N/A';
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
+        }
+
+        function fetchHistory(page, size, query = '', showEmpty = false) {
+            const url = `/get_history?page=${page}&size=${size}&query=${encodeURIComponent(query)}&show_empty_email=${showEmpty}`;
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    historyTableBody.innerHTML = '';
+                    data.records.forEach(record => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td><input type="checkbox" class="select-row" data-email="${record.email || ''}"></td>
+                            <td>${record.id || 'N/A'}</td>
+                            <td>${record.name || 'N/A'}</td>
+                            <td>${formatField(record.website)}</td>
+                            <td>${record.email || 'N/A'}</td>
+                            <td>${record.phones || 'N/A'}</td>
+                            <td class="twitter-column">${formatField(record.facebook)}</td>
+                            <td class="instagram-column">${formatField(record.twitter)}</td>
+                            <td class="linkedin-column">${formatField(record.instagram)}</td>
+                            <td class="whatsapp-column">${formatField(record.linkedin)}</td>
+                            <td class="youtube-column">${formatField(record.whatsapp)}</td>
+                            <td class="youtube-column">${formatField(record.youtube)}</td>
+                            <td>${record.send_count !== null ? record.send_count : 0}</td>
+                            <td>${formatDateTime(record.updated_at)}</td>
+                            <td>${formatDateTime(record.created_at)}</td>
+                        `;
+                        historyTableBody.appendChild(row);
+                    });
+
+                    pageInfo.textContent = `Page ${page} of ${data.total_pages}`;
+                    prevBtn.disabled = page === 1;
+                    nextBtn.disabled = page === data.total_pages;
+
+                    applyColumnVisibility();
+                })
+                .catch(error => {
+                    console.error('Error fetching history:', error);
+                    historyTableBody.innerHTML = '<tr><td colspan="14">Error loading history</td></tr>';
+                });
+        }
+
+        function exportToExcel() {
+            const query = document.getElementById('search-query').value;
+            const showEmpty = showEmptyEmailCheckbox.checked;
+            const visibleColumns = [
+                'id', 'name', 'website', 'email', 'phones',
+                toggleTwitter.checked ? 'facebook' : null,
+                toggleInstagram.checked ? 'twitter' : null,
+                toggleLinkedin.checked ? 'instagram' : null,
+                toggleWhatsapp.checked ? 'linkedin' : null,
+                toggleYoutube.checked ? 'whatsapp' : null,
+                toggleYoutube.checked ? 'youtube' : null,
+                'send_count', 'updated_at', 'created_at'
+            ].filter(col => col !== null);
+
+            const url = `/export_excel?query=${encodeURIComponent(query)}&show_empty_email=${showEmpty}&columns=${encodeURIComponent(JSON.stringify(visibleColumns))}`;
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.message); });
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `history_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error exporting Excel:', error);
+                    alert(`Failed to export Excel: ${error.message}`);
+                });
+        }
+
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const query = document.getElementById('search-query').value;
+            pageSize = parseInt(pageSizeSelect.value);
+            showEmptyEmail = showEmptyEmailCheckbox.checked;
+            currentPage = 1;
+            fetchHistory(currentPage, pageSize, query, showEmptyEmail);
+        });
+
+        pageSizeSelect.addEventListener('change', function() {
+            pageSize = parseInt(this.value);
+            currentPage = 1;
+            const query = document.getElementById('search-query').value;
+            showEmptyEmail = showEmptyEmailCheckbox.checked;
+            fetchHistory(currentPage, pageSize, query, showEmptyEmail);
+        });
+
+        showEmptyEmailCheckbox.addEventListener('change', function() {
+            showEmptyEmail = this.checked;
+            currentPage = 1;
+            const query = document.getElementById('search-query').value;
+            fetchHistory(currentPage, pageSize, query, showEmptyEmail);
+        });
+
+        prevBtn.addEventListener('click', function() {
+            if (currentPage > 1) {
+                currentPage--;
+                const query = document.getElementById('search-query').value;
+                fetchHistory(currentPage, pageSize, query, showEmptyEmail);
+            }
+        });
+
+        nextBtn.addEventListener('click', function() {
+            const query = document.getElementById('search-query').value;
+            currentPage++;
+            fetchHistory(currentPage, pageSize, query, showEmptyEmail);
+        });
+
+        selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.select-row');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+        });
+
+        sendSelectedBtn.addEventListener('click', function() {
+            const selectedCheckboxes = document.querySelectorAll('.select-row:checked');
+            const selectedEmails = Array.from(selectedCheckboxes)
+                .map(checkbox => checkbox.getAttribute('data-email'))
+                .filter(email => email && email !== 'N/A');
+
+            const uniqueEmails = [...new Set(selectedEmails)];
+            if (uniqueEmails.length > 0) {
+                const emailsParam = uniqueEmails.join(',');
+                const redirectUrl = `/send_email_page?emails=${emailsParam}`;
+                console.log(`Redirecting to: ${redirectUrl}`);
+                window.location.href = redirectUrl;
+            } else {
+                alert('No valid emails selected');
+            }
+        });
+
+        exportExcelBtn.addEventListener('click', exportToExcel);
+
+        function toggleColumnVisibility(className, show) {
+            const elements = document.querySelectorAll('.' + className);
+            elements.forEach(element => {
+                element.style.display = show ? 'table-cell' : 'none';
+            });
+        }
+
+        function applyColumnVisibility() {
+            toggleColumnVisibility('twitter-column', toggleTwitter.checked);
+            toggleColumnVisibility('instagram-column', toggleInstagram.checked);
+            toggleColumnVisibility('linkedin-column', toggleLinkedin.checked);
+            toggleColumnVisibility('whatsapp-column', toggleWhatsapp.checked);
+            toggleColumnVisibility('youtube-column', toggleYoutube.checked);
+        }
+
+        toggleTwitter.addEventListener('change', function() {
+            toggleColumnVisibility('twitter-column', this.checked);
+        });
+
+        toggleInstagram.addEventListener('change', function() {
+            toggleColumnVisibility('instagram-column', this.checked);
+        });
+
+        toggleLinkedin.addEventListener('change', function() {
+            toggleColumnVisibility('linkedin-column', this.checked);
+        });
+
+        toggleWhatsapp.addEventListener('change', function() {
+            toggleColumnVisibility('whatsapp-column', this.checked);
+        });
+
+        toggleYoutube.addEventListener('change', function() {
+            toggleColumnVisibility('youtube-column', this.checked);
+        });
+
+        applyColumnVisibility();
+
+        let currentTh = null;
+        let startOffset = null;
+        let startWidth = null;
+
+        historyTable.querySelectorAll('th').forEach(th => {
+            th.addEventListener('mousedown', function(e) {
+                const rect = this.getBoundingClientRect();
+                const rightEdge = rect.right;
+                const threshold = 5;
+
+                if (Math.abs(e.clientX - rightEdge) <= threshold) {
+                    currentTh = th;
+                    startOffset = e.clientX;
+                    startWidth = th.offsetWidth;
+                    document.body.style.cursor = 'col-resize';
+                }
+            });
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (currentTh) {
+                const diff = e.clientX - startOffset;
+                const newWidth = Math.max(100, startWidth + diff); // Minimum width of 100px
+                currentTh.style.width = `${newWidth}px`;
+                const index = Array.from(currentTh.parentNode.children).indexOf(currentTh) + 1;
+                historyTable.querySelectorAll(`tbody tr td:nth-child(${index})`).forEach(td => {
+                    td.style.width = `${newWidth}px`;
+                });
+            }
+        });
+
+        document.addEventListener('mouseup', function() {
+            currentTh = null;
+            document.body.style.cursor = 'default';
+        });
+
+        document.addEventListener('selectstart', function() {
+            if (currentTh) {
+                return false;
+            }
+        });
+
+        fetchHistory(currentPage, pageSize, '', showEmptyEmail);
+    </script>
+</body>
+</html>

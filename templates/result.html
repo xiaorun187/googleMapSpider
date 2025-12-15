@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提取结果 - Google Maps 数据提取</title>
+    <link href="{{ url_for('static', filename='js/bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+        .result-container {
+            max-width: 800px;
+            margin: 50px auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container result-container">
+        <h2 class="text-center mb-4">提取结果</h2>
+        {% if data %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>地址</th>
+                        <th>营业时间</th>
+                        <th>网站</th>
+                        <th>电话</th>
+                        <th>Plus Code</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in data %}
+                        <tr>
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.address or '无' }}</td>
+                            <td>{{ item.hours or '无' }}</td>
+                            <td>{{ item.website or '无' }}</td>
+                            <td>{{ item.phone or '无' }}</td>
+                            <td>{{ item.plusCode or '无' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if csv_file %}
+                <a href="{{ url_for('download_file', filename=csv_file) }}" class="btn btn-success">下载 CSV</a>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-warning">未提取到数据</div>
+        {% endif %}
+        <a href="{{ url_for('operation') }}" class="btn btn-primary mt-3">返回操作页面</a>
+    </div>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>

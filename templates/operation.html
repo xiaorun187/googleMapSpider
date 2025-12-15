@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Operation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        #extraction-form {
+            max-width: 500px;
+            margin: 0 auto 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        #extraction-form label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
+        #extraction-form input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        #extraction-form button, #extract-contacts-btn {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+        #extraction-form button:hover, #extract-contacts-btn:hover {
+            background-color: #0056b3;
+        }
+        #progress {
+            text-align: center;
+            margin: 20px 0;
+            color: #666;
+            font-size: 18px;
+        }
+        #business-table {
+            width: 80%;
+            max-width: 1200px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #business-table th, #business-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        #business-table th {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        #business-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        #business-table tr:hover {
+            background-color: #f1f1f1;
+        }
+        #business-table a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        #business-table a:hover {
+            text-decoration: underline;
+        }
+        #download-link {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        #download-link a {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        #download-link a:hover {
+            background-color: #218838;
+        }
+        /* 新增菜单样式 */
+        .menu {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .menu-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .menu-btn:hover {
+            background-color: #0056b3;
+        }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: #fff;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 4px;
+        }
+        .dropdown-content a {
+            color: #333;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+        /* 修改复选框和标签的样式 */
+        #extraction-form div.remember-checkbox {
+            margin-bottom: 15px;
+        }
+        #extraction-form div.remember-checkbox input[type="checkbox"] {
+            width: auto;
+            display: inline-block;
+            margin-right: 5px;
+            vertical-align: middle; /* 对齐复选框和文字 */
+        }
+        #extraction-form div.remember-checkbox label {
+            display: inline-block;
+            font-weight: normal; /* 去掉标签的加粗 */
+            vertical-align: middle; /* 对齐复选框和文字 */
+        }
+    </style>
+    <script src="{{ url_for('static', filename='js/socket.io.js') }}"></script>
+</head>
+<body>
+    <h1>Extract Business Info</h1>
+
+    <div class="menu">
+        <div class="dropdown">
+            <button class="menu-btn">Menu</button>
+            <div class="dropdown-content">
+                <a href="/history">History</a>
+            </div>
+        </div>
+    </div>
+
+    <form id="extraction-form">
+        <label for="url">Google Maps URL:</label>
+        <input type="text" id="url" name="url" required>
+        <label for="limit">Limit (number of businesses):</label>
+        <input type="number" id="limit" name="limit" value="10" min="1">
+        <label for="proxy">Proxy (optional, e.g., username:password@host:port or host:port):</label>
+        <input type="text" id="proxy" name="proxy">
+        <div class="remember-checkbox">
+            <input type="checkbox" id="remember_position" name="remember_position" checked>
+            <label for="remember_position">记住上次的拉取的位置</label>
+        </div>
+        <button type="submit">Start Extraction</button>
+        <button type="button" id="extract-contacts-btn" style="display: none;">Extract Contact Info</button>
+        <button type="button" id="send-email-btn">Send Email</button>
+    </form>
+
+    <div id="progress">Progress: 0% - Waiting...</div>
+    <table id="business-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Website</th>
+                <th>Emails</th>
+                <th>Phones</th>
+                <th>Facebook</th>
+                <th>Twitter</th>
+                <th>Instagram</th>
+                <th>LinkedIn</th>
+                <th>WhatsApp</th>
+                <th>YouTube</th>
+            </tr>
+        </thead>
+        <tbody id="business-table-body">
+        </tbody>
+    </table>
+    <div id="download-link" style="display: none;">
+        <a href="#">Download CSV</a>
+    </div>
+
+    <script>
+        const socket = io();
+        const form = document.getElementById('extraction-form');
+        const progressDiv = document.getElementById('progress');
+        const tableBody = document.getElementById('business-table-body');
+        const downloadLink = document.getElementById('download-link');
+        const extractContactsBtn = document.getElementById('extract-contacts-btn');
+        const sendEmailBtn = document.getElementById('send-email-btn');
+        let latestCsvFile = null;
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const url = document.getElementById('url').value;
+            const limit = document.getElementById('limit').value;
+            const proxy = document.getElementById('proxy').value;
+            const rememberPosition = document.getElementById('remember_position').checked; // 获取复选框状态
+
+            tableBody.innerHTML = '';
+            downloadLink.style.display = 'none';
+            extractContactsBtn.style.display = 'none';
+            progressDiv.textContent = 'Progress: 0% - Task started...';
+
+            fetch('/start_extraction', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `url=${encodeURIComponent(url)}&limit=${encodeURIComponent(limit)}&proxy=${encodeURIComponent(proxy)}&remember_position=${rememberPosition ? 'on' : 'off'}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    progressDiv.textContent = `Error: ${data.message}`;
+                }
+            })
+            .catch(error => {
+                progressDiv.textContent = `Workspace error: ${error}`;
+            });
+        });
+
+        extractContactsBtn.addEventListener('click', function() {
+            const proxy = document.getElementById('proxy').value;
+            progressDiv.textContent = 'Progress: 0% - Contact extraction started...';
+
+            fetch('/extract_contacts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `proxy=${encodeURIComponent(proxy)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    progressDiv.textContent = `Error: ${data.message}`;
+                }
+            })
+            .catch(error => {
+                progressDiv.textContent = `Workspace error: ${error}`;
+            });
+        });
+
+        function formatField(value) {
+            if (Array.isArray(value)) {
+                return value.length ? value.map(v => v.includes('http') ? `<a href="${v}" target="_blank">${v}</a>` : v).join(', ') : 'N/A';
+            }
+            return value ? (value.includes('http') ? `<a href="${value}" target="_blank">${value}</a>` : value) : 'N/A';
+        }
+
+        socket.on('progress_update', function(data) {
+            progressDiv.textContent = `Progress: ${data.progress}% - ${data.message || ''}`;
+
+            if (data.business_data) {
+                const row = document.createElement('tr');
+                row.dataset.name = data.business_data.name;
+                row.innerHTML = `
+                    <td>${data.business_data.name || 'N/A'}</td>
+                    <td>${formatField(data.business_data.website)}</td>
+                    <td>${formatField(data.business_data.emails)}</td>
+                    <td>${formatField(data.business_data.phones)}</td>
+                    <td>${formatField(data.business_data.facebook)}</td>
+                    <td>${formatField(data.business_data.twitter)}</td>
+                    <td>${formatField(data.business_data.instagram)}</td>
+                    <td>${formatField(data.business_data.linkedin)}</td>
+                    <td>${formatField(data.business_data.whatsapp)}</td>
+                    <td>${formatField(data.business_data.youtube)}</td>
+                `;
+                tableBody.appendChild(row);
+            }
+
+            if (data.progress === 100) {
+                if (data.csv_file) {
+                    downloadLink.style.display = 'block';
+                    downloadLink.querySelector('a').href = `/download/${data.csv_file}`;
+                    downloadLink.querySelector('a').textContent = `Download CSV (${data.csv_file})`;
+                }
+                extractContactsBtn.style.display = 'block';
+            }
+        });
+
+        socket.on('contact_update', function(data) {
+            progressDiv.textContent = `Progress: ${data.progress}% - ${data.message || ''}`;
+
+            if (data.business_data) {
+                const existingRow = tableBody.querySelector(`tr[data-name="${data.business_data.name}"]`);
+                if (existingRow) {
+                    existingRow.innerHTML = `
+                        <td>${data.business_data.name || 'N/A'}</td>
+                        <td>${formatField(data.business_data.website)}</td>
+                        <td>${formatField(data.business_data.emails)}</td>
+                        <td>${formatField(data.business_data.phones)}</td>
+                        <td>${formatField(data.business_data.facebook)}</td>
+                        <td>${formatField(data.business_data.twitter)}</td>
+                        <td>${formatField(data.business_data.instagram)}</td>
+                        <td>${formatField(data.business_data.linkedin)}</td>
+                        <td>${formatField(data.business_data.whatsapp)}</td>
+                        <td>${formatField(data.business_data.youtube)}</td>
+                    `;
+                }
+            }
+
+            if (data.progress === 100 && data.csv_file) {
+                downloadLink.style.display = 'block';
+                downloadLink.querySelector('a').href = `/download/${data.csv_file}`;
+                downloadLink.querySelector('a').textContent = `Download CSV (${data.csv_file})`;
+            }
+        });
+
+        sendEmailBtn.addEventListener('click', function() {
+            const emailList = [];
+            const rows = tableBody.querySelectorAll('tr');
+            rows.forEach(row => {
+                const emailCell = row.cells[2];
+                const emailsText = emailCell.textContent.trim();
+                if (emailsText !== 'N/A') {
+                    const emails = emailsText.split(', ');
+                    emails.forEach(email => {
+                        if (email && !email.includes('http')) {
+                            emailList.push(email);
+                        }
+                    });
+                }
+            });
+
+            const uniqueEmails = [...new Set(emailList)];
+            if (uniqueEmails.length >=0) {
+                    //const emailsParam = encodeURIComponent(JSON.stringify(uniqueEmails));
+                    const emailsParam = uniqueEmails.join(',');  // 使用逗号分隔
+                    const redirectUrl = `/send_email_page?emails=${emailsParam}`;
+                    console.log(`Redirecting to: ${redirectUrl}`);  // 调试信息
+                    window.location.href = redirectUrl;
+            } else {
+                progressDiv.textContent = 'No valid emails found to send';
+            }
+        });
+    </script>
+</body>
+</html>
