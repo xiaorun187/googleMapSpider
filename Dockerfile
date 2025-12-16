@@ -4,13 +4,11 @@ FROM python:3.10.11-slim
 # 设置工作目录
 WORKDIR /app
 
-# 复制项目文件到容器
-COPY . /app
-
 # 升级 pip
 RUN python -m pip install --upgrade pip
 
 # 安装系统依赖（使用正确的包名 libglib2.0-0）
+# 这些层会被缓存，除非您修改了这里
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     gnupg \
@@ -66,8 +64,16 @@ RUN wget -O /tmp/chromedriver-linux64.zip https://storage.googleapis.com/chrome-
     && ls -l /usr/local/bin/chromedriver || { echo "ChromeDriver not found"; exit 1; } \
     && /usr/local/bin/chromedriver --version || { echo "ChromeDriver failed to run"; exit 1; }
 
+# 优化策略：首先只复制 requirements.txt
+# 这样只要依赖没变，这层和下一层 pip install 就能使用缓存
+COPY requirements.txt .
+
 # 安装 Python 依赖
 RUN pip install --no-cache-dir -r requirements.txt
+
+# 优化策略：最后才复制项目代码
+# 只有这里变更时，才会重新构建这一层，前面的所有层都会复用缓存
+COPY . .
 
 # 设置环境变量，避免 Chrome 崩溃
 ENV CHROME_BIN=/usr/bin/google-chrome
@@ -79,5 +85,5 @@ EXPOSE 5000
 # 设置 Flask 端口变量 (app.py 会读取此变量)
 ENV PORT=5000
 
-# 运行 Flask 应用 (使用 Gunicorn + Eventlet)
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "-b", "0.0.0.0:5000", "--timeout", "120", "app:app"]
+# 运行 Flask 应用
+CMD ["python", "app.py"]
