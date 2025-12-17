@@ -72,8 +72,14 @@ def get_chrome_driver(proxy=None):
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    # chrome_options.add_argument("--headless") # 本地调试可注释掉，看效果
-    # chrome_options.add_argument("--headless=new") # 推荐使用新版 headless 模式 (已注释，方便本地调试观看)
+    
+    # 根据环境变量决定是否启用无头模式
+    if os.environ.get("IS_DOCKER") == "true":
+        print("Docker 环境检测: 启用无头模式 (headless=new)")
+        chrome_options.add_argument("--headless=new")
+    else:
+        print("本地环境检测: 启用 GUI 模式 (可见窗口)")
+        # chrome_options.add_argument("--headless=new") # 本地开发不启用无头模式
     # chrome_options.add_argument("--disable-gpu")  # Mac 上不需要
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")

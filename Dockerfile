@@ -1,4 +1,4 @@
-# 使用官方 Python 3.10.11 镜像作为基础镜像
+# 使用 Python 3.13 镜像
 FROM python:3.13-slim
 
 # 设置工作目录
@@ -45,7 +45,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libcairo2 \
+    # Python 3.13 构建依赖
+    build-essential \
+    python3-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
+
+# 设置 Docker 环境标识
+ENV IS_DOCKER=true
 
 # 下载并安装 Chrome 134.0.6998.165（linux64）
 RUN wget -O /tmp/chrome-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/134.0.6998.165/linux64/chrome-linux64.zip \

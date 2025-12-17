@@ -76,19 +76,19 @@ zip -r deploy.zip . -x "venv/*" -x "__pycache__/*" -x ".git/*" -x "*.DS_Store" -
 使用 `scp` 或 FTP 工具将 `deploy.zip` 上传到服务器。
 例如：
 ```bash
-scp deploy.zip root@<服务器IP>:/root/spider/
+scp deploy.zip root@<服务器IP>:/root/
 ```
 
 ### 3. 服务器端操作
 登录服务器并执行部署：
 ```bash
 # 1. 进入目录并解压 (覆盖更新)
-cd /root/spider/
-unzip -o deploy.zip
+cd /root
+unzip -o deploy_v12.zip -d google_map_spider/
 
 # 2. 停止旧容器并重新构建启动
-docker-compose down
-docker-compose up --build -d
+cd google_map_spider/ 
+docker-compose down && docker-compose up --build -d && docker ps
 
 # 3. 验证运行状态
 docker ps
