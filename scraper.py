@@ -10,28 +10,14 @@ from selenium.webdriver.common.keys import Keys
 import db as db_module
 
 
-def highlight_element(driver, element, color="red", border_width="3px", duration=0.5):
-    """高亮显示元素，用于调试和可视化"""
-    try:
-        # 保存原始样式
-        original_style = element.get_attribute('style') or ''
-        # 添加高亮样式
-        highlight_style = f"border: {border_width} solid {color} !important; background-color: rgba(255,255,0,0.3) !important; box-shadow: 0 0 10px {color} !important;"
-        driver.execute_script(f"arguments[0].setAttribute('style', '{highlight_style}');", element)
-        time.sleep(duration)
-        # 恢复原始样式
-        driver.execute_script(f"arguments[0].setAttribute('style', '{original_style}');", element)
-    except Exception as e:
-        print(f"高亮元素失败: {e}", file=sys.stderr)
+# 生产环境禁用调试高亮功能，减少性能开销
+# def highlight_element(driver, element, color="red", border_width="3px", duration=0.5):
+#     """高亮显示元素，用于调试和可视化"""
+#     pass
 
-
-def highlight_element_keep(driver, element, color="red", border_width="3px"):
-    """高亮显示元素并保持（不恢复原样式）"""
-    try:
-        highlight_style = f"border: {border_width} solid {color} !important; background-color: rgba(255,255,0,0.3) !important; box-shadow: 0 0 10px {color} !important;"
-        driver.execute_script(f"arguments[0].setAttribute('style', arguments[0].getAttribute('style') + ';{highlight_style}');", element)
-    except Exception as e:
-        print(f"高亮元素失败: {e}", file=sys.stderr)
+# def highlight_element_keep(driver, element, color="red", border_width="3px"):
+#     """高亮显示元素并保持（不恢复原样式）"""
+#     pass
 
 
 def wait_for_element(driver, selector, timeout=5):
@@ -96,8 +82,8 @@ def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=3, target_count=50
 def extract_single_business_info(driver):
     results = []
     try:
-        time.sleep(3)  # 确保页面加载
-        name_elem = wait_for_element(driver, 'h1.DUwDvf')
+        # 移除固定等待，使用智能等待确保页面加载
+        name_elem = wait_for_element(driver, 'h1.DUwDvf', timeout=10)
         name = name_elem.text.strip() if name_elem else "Unknown"
 
         business_data = {'name': name, 'website': None}
@@ -241,12 +227,10 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 continue
             name = name.replace('Visited link', '').strip()
 
-            # 高亮当前要点击的商家链接
-            highlight_element(driver, link, color="blue", border_width="4px", duration=0.8)
-            
             print(f"点击商家: {name}")
             ActionChains(driver).move_to_element(link).click().perform()
-            time.sleep(3)  # 确保页面加载
+            # 使用智能等待替代固定等待，提高效率
+            wait_for_element(driver, 'div[role="region"][aria-label*="Information for"]', timeout=5)
 
             # 发送提取状态
             progress = int(50 + (current_index + 1) / total * 50) if total > 0 else 50  # 提取阶段占后 50% 进度
@@ -261,8 +245,6 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             if not info_panel:
                 print(f"未找到 {name} 的信息面板，跳过")
                 continue
-            # 高亮信息面板
-            highlight_element(driver, info_panel, color="purple", border_width="3px", duration=0.3)
             print(f"找到 {name} 的信息面板")
 
             business_data = {'name': name, 'website': None}
@@ -270,8 +252,6 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             # 精准提取网站
             website_elem = wait_for_element(driver, 'a[aria-label*="Website:"], a[data-item-id="authority"]', timeout=3)
             if website_elem:
-                # 高亮网站元素
-                highlight_element(driver, website_elem, color="green", border_width="3px", duration=0.5)
                 href = website_elem.get_attribute('href')
                 business_data['website'] = href
                 print(f"提取到网站: {href}")
@@ -279,8 +259,6 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 print(f"未找到 {name} 的网站元素，使用备用选择器")
                 website_elem = wait_for_element(driver, 'a[href^="http"]:not([href*="google.com"])', timeout=3)
                 if website_elem:
-                    # 高亮备用网站元素
-                    highlight_element(driver, website_elem, color="green", border_width="3px", duration=0.5)
                     href = website_elem.get_attribute('href')
                     business_data['website'] = href
                     print(f"备用选择器提取到网站: {href}")
@@ -288,8 +266,6 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             business_data['phones'] = []  # 初始化 phones 字段
             phone_elem = wait_for_element(driver, 'button[data-item-id^="phone"], div[aria-label*="Phone:"]', timeout=3)
             if phone_elem:
-                # 高亮电话元素
-                highlight_element(driver, phone_elem, color="orange", border_width="3px", duration=0.5)
                 phone_text = phone_elem.text.strip()
                 if phone_text:
                     # 清理常见分隔符，保留数字和加号
@@ -304,8 +280,6 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                                                      'div.rogA2c span.google-symbols[aria-hidden="true"] + div.Io6YTe',
                                                      timeout=3)
                 if backup_phone_elem:
-                    # 高亮备用电话元素
-                    highlight_element(driver, backup_phone_elem, color="orange", border_width="3px", duration=0.5)
                     phone_text = backup_phone_elem.text.strip()
                     if phone_text:
                         phone = ''.join(c for c in phone_text if c.isdigit() or c == '+')

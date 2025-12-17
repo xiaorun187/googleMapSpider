@@ -15,7 +15,7 @@
 
 ## 🛠 技术栈
 
-- **后端**: Python 3.10, Flask, Flask-SocketIO
+- **后端**: Python 3.13, Flask, Flask-SocketIO
 - **服务器**: Gevent (异步高性能模式)
 - **爬虫**: Selenium, Chrome/ChromeDriver (无头模式)
 - **数据库**: SQLite (轻量级存储)
@@ -84,7 +84,7 @@ scp deploy.zip root@<服务器IP>:/root/
 ```bash
 # 1. 进入目录并解压 (覆盖更新)
 cd /root
-unzip -o deploy_v13.zip -d google_map_spider/
+unzip -o deploy.zip -d google_map_spider/
 
 # 2. 停止旧容器并重新构建启动
 cd google_map_spider/ && docker-compose down && docker-compose up --build -d

@@ -20,10 +20,11 @@ def wait_for_element(driver, selector, timeout=5):
         print(f"未找到元素 {selector}: {e}", file=sys.stderr)
         return None
 
-def scroll_page(driver, scroll_times=3, scroll_delay=1):
-    """滚动页面以加载动态内容"""
+def scroll_page(driver, scroll_times=3, scroll_delay=0.5):
+    """滚动页面以加载动态内容，减少等待时间"""
     for i in range(scroll_times):
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        # 使用更短的延迟时间，或考虑使用智能等待替代固定延迟
         time.sleep(scroll_delay)
 
 def is_valid_email(email):
