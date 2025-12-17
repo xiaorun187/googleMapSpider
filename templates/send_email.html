@@ -1,347 +1,237 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Send Email</title>
-    <link href="{{ url_for('static', filename='js/bootstrap.min.css') }}" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发送邮件 - Google Maps 商家提取</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            background-color: #f4f7f9;
-        }
-        .email-container {
-            max-width: 80%;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        h2 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            font-weight: bold;
-            color: #555;
-        }
-        .btn-send {
-            background-color: #007bff;
-            color: white;
-            width: 100%;
-        }
-        .btn-send:hover {
-            background-color: #0056b3;
-        }
-        #email-progress {
-            margin-top: 10px;
-            color: #666;
-            text-align: center;
-        }
-        #recipients-table {
-            width: 100%;
-            border-collapse: collapse;
-            max-height: 200px;
-            overflow-y: auto;
-            display: block;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background-color: #f8f9fa;
-        }
-        #recipients-table th, #recipients-table td {
-            padding: 8px;
-            border-bottom: 1px solid #eee;
-            text-align: left;
-        }
-        #recipients-table th {
-            background-color: #007bff;
-            color: white;
-            position: sticky;
-            top: 0;
-        }
-        #recipients-table tr:last-child td {
-            border-bottom: none;
-        }
-        #recipients-table .btn-sm {
-            padding: 2px 8px;
-            font-size: 12px;
-        }
-        #add-email-form {
-            display: flex;
-            margin-top: 10px;
-            align-items: flex-start;
-        }
-        #add-email-input {
-            flex-grow: 1;
-            margin-right: 10px;
-            min-height: 60px;
-            resize: vertical;
-        }
-        #add-email-btn {
-            background-color: #28a745;
-            color: white;
-            align-self: flex-start;
-        }
-        #add-email-btn:hover {
-            background-color: #218838;
-        }
-        .edit-input {
-            width: 100%;
-            padding: 4px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .help-text {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 16px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 14px 24px; background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 10px; }
+        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .nav-links { display: flex; gap: 10px; }
+        .nav-links a { padding: 9px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 9px; font-size: 13px; font-weight: 500; transition: all 0.3s; }
+        .nav-links a:hover { transform: translateY(-2px); }
+        .main-content { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: stretch; }
+        .recipients-panel { background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .email-panel { background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .panel-header { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+        .panel-title { font-size: 15px; font-weight: 600; color: #1a1a2e; display: flex; align-items: center; gap: 9px; }
+        .panel-title::before { content: ""; width: 4px; height: 18px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 2px; }
+        .panel-body { padding: 16px 20px; flex: 1; display: flex; flex-direction: column; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
+        .form-group input, .form-group textarea { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 13px; transition: all 0.3s; background: #f8fafc; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #667eea; background: white; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        .checkbox-group { display: flex; align-items: center; gap: 9px; padding: 11px 14px; background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0; cursor: pointer; margin-bottom: 14px; }
+        .checkbox-group:hover { border-color: #667eea; }
+        .checkbox-group input { width: 16px; height: 16px; accent-color: #667eea; }
+        .checkbox-group label { font-size: 13px; color: #4a5568; cursor: pointer; }
+        .btn { padding: 12px 18px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 7px; }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; width: 100%; }
+        .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; width: 100%; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.tiny.cloud/1/kf40zdu58dqe3bhscnrcegr8fyagpuqq07u60szoxfht62pw/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
 <body>
-    <div class="email-container">
-        <h2>Send Extraction Results</h2>
-        <div class="form-group">
-            <label for="recipients-table">Recipient Emails:</label>
-            <table id="recipients-table">
-                <thead>
-                    <tr>
-                        <th>Email</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="recipients-table-body"></tbody>
-            </table>
-            <div id="add-email-form">
-                <textarea id="add-email-input" class="form-control" placeholder="Enter emails (separated by space, comma, semicolon, or new line)"></textarea>
-                <button id="add-email-btn" class="btn">Add</button>
+<div class="container">
+    <header class="header">
+        <h1><span class="logo-icon">✉️</span>发送邮件</h1>
+        <nav class="nav-links"><a href="/operation">🔍 数据提取</a><a href="/history">📋 历史记录</a></nav>
+    </header>
+    <div class="main-content">
+        <aside class="recipients-panel">
+            <div class="panel-header"><h3 class="panel-title">收件人列表</h3></div>
+            <div class="panel-body">
+                <div class="recipients-stats" id="recipients-stats"></div>
+                <div class="recipients-list" id="recipients-list"></div>
+                <div class="add-email-section">
+                    <div class="form-group">
+                        <label>添加收件人</label>
+                        <textarea id="add-email-input" rows="3" placeholder="输入邮箱地址，支持空格、逗号、分号或换行分隔"></textarea>
+                    </div>
+                    <button class="btn btn-success" id="add-email-btn">➕ 添加邮箱</button>
+                </div>
             </div>
-            <div class="help-text">Enter multiple emails separated by spaces, commas, semicolons, or new lines (e.g., email1@example.com, email2@example.com).</div>
-        </div>
-        <div class="form-group">
-            <label for="subject">Subject:</label>
-            <input type="text" class="form-control" id="subject" value="Google Maps Extraction Results">
-        </div>
-        <div class="form-group">
-            <label for="email-body">Email Body:</label>
-            <textarea class="form-control" id="email-body" rows="8"></textarea>
-        </div>
-        <div class="form-check">
-            <input type="checkbox" class="form-check-input" id="attach-file" checked>
-            <label class="form-check-label" for="attach-file">Attach CSV File</label>
-        </div>
-        <button class="btn btn-send mt-3" id="send-email">Send to All</button>
-        <div id="email-progress"></div>
+        </aside>
+        <main class="email-panel">
+            <div class="panel-header"><h3 class="panel-title">邮件内容</h3></div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>邮件主题</label>
+                    <input type="text" id="subject" value="Google Maps Extraction Results">
+                </div>
+                <div class="form-group" style="flex:1;display:flex;flex-direction:column;">
+                    <label>邮件正文</label>
+                    <textarea id="email-body" style="flex:1;min-height:280px;"></textarea>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="attach-file" checked>
+                    <label for="attach-file">附加 CSV 文件</label>
+                </div>
+                <button class="btn btn-primary" id="send-email">🚀 发送邮件</button>
+                <div class="progress-section" id="progress-section"></div>
+            </div>
+        </main>
     </div>
-
-    <script>
-        // 初始化 TinyMCE
-        tinymce.init({
-            selector: '#email-body',
-            height: 300,
-            width: '100%',
-            menubar: true,
-            plugins: 'advlist autolink lists link image charmap print preview anchor searchreplace visualblocks code fullscreen insertdatetime media table emoticons template wordcount',
-            toolbar: 'undo redo | insertfile image link | styleselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | forecolor backcolor | code',
-            images_upload_base64: true,
-            init_instance_callback: function (editor) {
-                console.log('TinyMCE initialized');
-                const urlParams = new URLSearchParams(window.location.search);
-                const csvFile = urlParams.get('file') || 'No file generated';
-                const cachedBody = localStorage.getItem('emailBodyCache');
-                editor.setContent(cachedBody ? cachedBody : `<p>Hello,</p><p>Here are the Google Maps extraction results:</p><ul><li>Extraction Time: ${new Date().toLocaleString()}</li><li>File: ${csvFile}</li></ul><p>Please see the attached file or download it from the link.</p><p>Regards,<br>[Your Name]</p>`);
-
-                editor.on('Change', function () {
-                    localStorage.setItem('emailBodyCache', editor.getContent());
-                });
-            }
-        });
-
-        // 从 URL 获取参数
-        const urlParams = new URLSearchParams(window.location.search);
-        const csvFile = urlParams.get('file') || 'No file generated';
-        let emails = decodeURIComponent(urlParams.get('emails') || '').split(',');
-        const progressDiv = document.getElementById('email-progress');
-        const recipientsTableBody = document.getElementById('recipients-table-body');
-        const addEmailInput = document.getElementById('add-email-input');
-        const addEmailBtn = document.getElementById('add-email-btn');
-        const subjectInput = document.getElementById('subject');
-
-        // 加载缓存的主题
-        const cachedSubject = localStorage.getItem('emailSubjectCache');
-        if (cachedSubject) {
-            subjectInput.value = cachedSubject;
-        }
-
-        // 保存主题到缓存
-        subjectInput.addEventListener('input', function() {
-            localStorage.setItem('emailSubjectCache', this.value);
-        });
-
-        // 渲染邮箱表格
-        function renderEmails() {
-            recipientsTableBody.innerHTML = '';
-            if (emails && emails.length > 0) {
-                emails.forEach((email, index) => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="email-cell" data-index="${index}">${email}</td>
-                        <td>
-                            <button class="btn btn-warning btn-sm edit-btn" data-index="${index}">Edit</button>
-                            <button class="btn btn-danger btn-sm delete-btn" data-index="${index}">Delete</button>
-                        </td>
-                    `;
-                    recipientsTableBody.appendChild(tr);
-                });
-            } else {
-                recipientsTableBody.innerHTML = '<tr><td colspan="2">No recipients provided</td></tr>';
-            }
-        }
-
-        // 验证邮箱格式
-        function isValidEmail(email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            return emailRegex.test(email);
-        }
-
-        // 初始渲染邮箱列表
-        renderEmails();
-
-        // 操作事件
-        recipientsTableBody.addEventListener('click', function(e) {
-            const index = parseInt(e.target.getAttribute('data-index'));
-
-            if (e.target.classList.contains('delete-btn')) {
-                emails.splice(index, 1);
-                renderEmails();
-            } else if (e.target.classList.contains('edit-btn')) {
-                const emailCell = document.querySelector(`.email-cell[data-index="${index}"]`);
-                const currentEmail = emails[index];
-                emailCell.innerHTML = `
-                    <input type="email" class="edit-input" value="${currentEmail}">
-                    <button class="btn btn-success btn-sm save-btn" data-index="${index}">Save</button>
-                `;
-                e.target.style.display = 'none';
-            } else if (e.target.classList.contains('save-btn')) {
-                const emailCell = document.querySelector(`.email-cell[data-index="${index}"]`);
-                const newEmail = emailCell.querySelector('.edit-input').value.trim();
-                if (newEmail && isValidEmail(newEmail)) {
-                    if (!emails.includes(newEmail) || newEmail === emails[index]) {
-                        emails[index] = newEmail;
-                        renderEmails();
-                    } else {
-                        alert('This email is already in the list.');
-                    }
-                } else {
-                    alert('Please enter a valid email address.');
-                }
-            }
-        });
-
-        // 批量添加邮箱
-        addEmailBtn.addEventListener('click', function() {
-            const input = addEmailInput.value.trim();
-            if (!input) {
-                alert('Please enter at least one email address.');
-                return;
-            }
-
-            // 支持空格、逗号、分号、回车、换行分隔
-            const newEmails = input.split(/[\s,;]+|\r\n|\n|\r/).map(email => email.trim()).filter(email => email);
-            let addedCount = 0;
-            let invalidEmails = [];
-            let duplicateEmails = [];
-
-            newEmails.forEach(email => {
-                if (!isValidEmail(email)) {
-                    invalidEmails.push(email);
-                } else if (emails.includes(email)) {
-                    duplicateEmails.push(email);
-                } else {
-                    emails.push(email);
-                    addedCount++;
-                }
-            });
-
-            renderEmails();
-            addEmailInput.value = '';
-
-            // 显示添加结果
-            let message = '';
-            if (addedCount > 0) {
-                message += `Successfully added ${addedCount} email(s). `;
-            }
-            if (invalidEmails.length > 0) {
-                message += `Invalid emails: ${invalidEmails.join(', ')}. `;
-            }
-            if (duplicateEmails.length > 0) {
-                message += `Duplicate emails: ${duplicateEmails.join(', ')}.`;
-            }
-            if (message) {
-                alert(message.trim());
-            }
-        });
-
-        // 按 Ctrl+Enter 触发添加（避免与 textarea 的默认换行冲突）
-        addEmailInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && e.ctrlKey) {
-                e.preventDefault();
-                addEmailBtn.click();
-            }
-        });
-
-        // 发送邮件
-        document.getElementById('send-email').addEventListener('click', async function() {
-            const subject = document.getElementById('subject').value;
-            const body = tinymce.get('email-body').getContent();
-            const attachFile = document.getElementById('attach-file').checked;
-            const sendButton = document.getElementById('send-email');
-            sendButton.disabled = true;
-
-            if (emails.length === 0) {
-                progressDiv.textContent = 'No emails to send.';
-                sendButton.disabled = false;
-                return;
-            }
-
-            let successCount = 0;
-            const sentEmails = [];
-            for (let i = 0; i < emails.length; i++) {
-                const email = emails[i];
-                progressDiv.textContent = `Sending email ${i + 1}/${emails.length} to ${email}...`;
-
-                try {
-                    const response = await fetch('/send_email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            recipient: email,
-                            subject: subject,
-                            body: body,
-                            attach_file: attachFile ? csvFile : null
-                        })
-                    });
-                    const data = await response.json();
-                    if (data.status === 'success') {
-                        successCount++;
-                        sentEmails.push(email);
-                        progressDiv.textContent = `Sent ${i + 1}/${emails.length} emails. Success: ${successCount}`;
-                    } else {
-                        progressDiv.textContent = `Failed to send to ${email}: ${data.message}`;
-                    }
-                } catch (error) {
-                    progressDiv.textContent = `Error sending to ${email}: ${error}`;
-                }
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-            sendButton.disabled = false;
-            setTimeout(() => window.close(), 2000);
-        });
-    </script>
+</div>
 </body>
 </html>
+
+<style>
+    .recipients-stats { display: flex; gap: 14px; margin-bottom: 14px; padding: 12px; background: linear-gradient(135deg, #f0f4ff, #f5f3ff); border-radius: 10px; }
+    .stat-item { text-align: center; flex: 1; }
+    .stat-value { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
+    .recipients-list { flex: 1; overflow-y: auto; max-height: 280px; border: 2px solid #e2e8f0; border-radius: 10px; margin-bottom: 14px; }
+    .recipient-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s; }
+    .recipient-item:last-child { border-bottom: none; }
+    .recipient-item:hover { background: #f8fafc; }
+    .recipient-email { font-size: 12px; color: #334155; display: flex; align-items: center; gap: 7px; }
+    .recipient-email::before { content: "📧"; font-size: 11px; }
+    .recipient-actions { display: flex; gap: 5px; }
+    .recipient-actions button { padding: 4px 9px; border: none; border-radius: 5px; font-size: 11px; cursor: pointer; transition: all 0.2s; }
+    .recipient-actions .edit-btn { background: #fef3c7; color: #d97706; }
+    .recipient-actions .delete-btn { background: #fee2e2; color: #dc2626; }
+    .recipient-actions button:hover { transform: scale(1.05); }
+    .empty-recipients { text-align: center; padding: 36px 16px; color: #94a3b8; }
+    .empty-recipients .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .add-email-section { margin-top: auto; padding-top: 14px; border-top: 1px solid #e2e8f0; }
+    .progress-section { margin-top: 14px; padding: 14px; background: #f8fafc; border-radius: 10px; display: none; }
+    .progress-section.show { display: block; }
+    .progress-bar-container { background: #e2e8f0; border-radius: 10px; height: 10px; overflow: hidden; margin-bottom: 10px; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px; transition: width 0.4s; width: 0%; }
+    .progress-text { font-size: 12px; color: #64748b; text-align: center; }
+    .edit-input { width: 100%; padding: 5px 9px; border: 2px solid #667eea; border-radius: 5px; font-size: 12px; }
+    .spinner { width: 13px; height: 13px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 1000px) { .main-content { grid-template-columns: 1fr; } }
+</style>
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+const csvFile = urlParams.get('file') || 'No file generated';
+let emails = decodeURIComponent(urlParams.get('emails') || '').split(',').filter(e => e && e.trim());
+
+function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+
+function renderStats() {
+    document.getElementById('recipients-stats').innerHTML = `
+        <div class="stat-item"><div class="stat-value">${emails.length}</div><div class="stat-label">收件人</div></div>
+        <div class="stat-item"><div class="stat-value">${emails.filter(isValidEmail).length}</div><div class="stat-label">有效邮箱</div></div>
+    `;
+}
+
+function renderRecipients() {
+    const list = document.getElementById('recipients-list');
+    if (!emails.length) {
+        list.innerHTML = '<div class="empty-recipients"><div class="empty-icon">📭</div><div>暂无收件人</div></div>';
+    } else {
+        list.innerHTML = emails.map((email, i) => `
+            <div class="recipient-item" data-index="${i}">
+                <span class="recipient-email">${email}</span>
+                <div class="recipient-actions">
+                    <button class="edit-btn" onclick="editEmail(${i})">编辑</button>
+                    <button class="delete-btn" onclick="deleteEmail(${i})">删除</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    renderStats();
+}
+
+window.deleteEmail = function(i) { emails.splice(i, 1); renderRecipients(); };
+
+window.editEmail = function(i) {
+    const item = document.querySelector(`.recipient-item[data-index="${i}"]`);
+    const emailSpan = item.querySelector('.recipient-email');
+    const current = emails[i];
+    emailSpan.innerHTML = `<input type="email" class="edit-input" value="${current}" onkeydown="if(event.key==='Enter')saveEmail(${i},this.value)">`;
+    emailSpan.querySelector('input').focus();
+    item.querySelector('.edit-btn').textContent = '保存';
+    item.querySelector('.edit-btn').onclick = () => saveEmail(i, item.querySelector('.edit-input').value);
+};
+
+window.saveEmail = function(i, val) {
+    val = val.trim();
+    if (val && isValidEmail(val)) { emails[i] = val; renderRecipients(); }
+    else { alert('请输入有效的邮箱地址'); }
+};
+
+document.getElementById('add-email-btn').addEventListener('click', function() {
+    const input = document.getElementById('add-email-input').value.trim();
+    if (!input) { alert('请输入邮箱地址'); return; }
+    const newEmails = input.split(/[\s,;]+|\r\n|\n|\r/).map(e => e.trim()).filter(e => e);
+    let added = 0, invalid = [], dup = [];
+    newEmails.forEach(e => {
+        if (!isValidEmail(e)) invalid.push(e);
+        else if (emails.includes(e)) dup.push(e);
+        else { emails.push(e); added++; }
+    });
+    renderRecipients();
+    document.getElementById('add-email-input').value = '';
+    let msg = added ? `成功添加 ${added} 个邮箱。` : '';
+    if (invalid.length) msg += ` 无效: ${invalid.join(', ')}`;
+    if (dup.length) msg += ` 重复: ${dup.join(', ')}`;
+    if (msg) alert(msg);
+});
+
+tinymce.init({
+    selector: '#email-body',
+    height: 320,
+    menubar: true,
+    plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table emoticons wordcount',
+    toolbar: 'undo redo | styleselect | bold italic | alignleft aligncenter alignright | bullist numlist outdent indent | forecolor backcolor | link image | code',
+    content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; }',
+    init_instance_callback: function(editor) {
+        const cached = localStorage.getItem('emailBodyCache');
+        editor.setContent(cached || `<p>您好，</p><p>这是 Google Maps 商家数据提取结果：</p><ul><li>提取时间: ${new Date().toLocaleString()}</li><li>文件: ${csvFile}</li></ul><p>请查看附件或下载链接。</p><p>此致</p>`);
+        editor.on('Change', () => localStorage.setItem('emailBodyCache', editor.getContent()));
+    }
+});
+
+const subjectInput = document.getElementById('subject');
+const cachedSubject = localStorage.getItem('emailSubjectCache');
+if (cachedSubject) subjectInput.value = cachedSubject;
+subjectInput.addEventListener('input', function() { localStorage.setItem('emailSubjectCache', this.value); });
+
+document.getElementById('send-email').addEventListener('click', async function() {
+    if (!emails.length) { alert('请添加收件人'); return; }
+    const subject = document.getElementById('subject').value;
+    const body = tinymce.get('email-body').getContent();
+    const attachFile = document.getElementById('attach-file').checked;
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 发送中...';
+    
+    const progress = document.getElementById('progress-section');
+    progress.classList.add('show');
+    progress.innerHTML = `<div class="progress-bar-container"><div class="progress-bar" id="prog-bar"></div></div><div class="progress-text" id="prog-text">准备发送...</div>`;
+    
+    let success = 0;
+    for (let i = 0; i < emails.length; i++) {
+        const pct = Math.round((i / emails.length) * 100);
+        document.getElementById('prog-bar').style.width = pct + '%';
+        document.getElementById('prog-text').textContent = `正在发送 ${i+1}/${emails.length} 到 ${emails[i]}...`;
+        try {
+            const res = await fetch('/send_email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recipient: emails[i], subject, body, attach_file: attachFile ? csvFile : null })
+            });
+            const data = await res.json();
+            if (data.status === 'success') success++;
+        } catch (e) { console.error(e); }
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    document.getElementById('prog-bar').style.width = '100%';
+    document.getElementById('prog-text').textContent = `发送完成！成功 ${success}/${emails.length}`;
+    btn.disabled = false;
+    btn.innerHTML = '🚀 发送邮件';
+});
+
+renderRecipients();
+</script>

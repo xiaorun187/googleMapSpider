@@ -21,21 +21,14 @@ else:  # Linux/Mac
     # Linux (Docker) 默认路径通常是: /usr/bin/google-chrome
     if sys.platform == 'darwin':
         CHROME_BINARY = os.environ.get('CHROME_BIN', r"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        # Mac ARM64 使用 webdriver-manager 下载的 chromedriver
+        CHROMEDRIVER_PATH = os.environ.get('CHROMEDRIVER_PATH', "/Users/hanglu/.wdm/drivers/chromedriver/mac64/143.0.7499.146/chromedriver-mac-arm64/chromedriver")
     else:
         CHROME_BINARY = os.environ.get('CHROME_BIN', "/usr/bin/google-chrome")
-    
-    CHROMEDRIVER_PATH = os.environ.get('CHROMEDRIVER_PATH', "/usr/local/bin/chromedriver")
-# MySQL 配置
-DB_CONFIG = {
-    'host': 'vip3.xiaomiqiu123.top',
-    'user': 'google_maps',
-    'password': 'yun@google_maps',
-    'database': 'google_maps',
-    'raise_on_warnings': True,
-    'port': 40594,  # 添加端口号
-    'ssl_disabled': True,
-    'connect_timeout': 120
-}
+        CHROMEDRIVER_PATH = os.environ.get('CHROMEDRIVER_PATH', "/usr/local/bin/chromedriver")
+# 数据库配置
+# 项目使用SQLite数据库，无需额外配置
+# 数据库文件路径: business.db (在项目根目录)
 # 创建输出目录
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)

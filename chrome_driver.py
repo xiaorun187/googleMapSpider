@@ -70,15 +70,16 @@ def get_chrome_driver(proxy=None):
     chrome_options = Options()
     # 常用配置
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
-    chrome_options.add_argument("window-size=1920,3000")
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     # chrome_options.add_argument("--headless") # 本地调试可注释掉，看效果
-    chrome_options.add_argument("--headless=new") # 推荐使用新版 headless 模式
-    chrome_options.add_argument("--disable-gpu")
+    # chrome_options.add_argument("--headless=new") # 推荐使用新版 headless 模式 (已注释，方便本地调试观看)
+    # chrome_options.add_argument("--disable-gpu")  # Mac 上不需要
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--ignore-certificate-errors")
-    chrome_options.add_argument("--disable-webgl")
+    # chrome_options.add_argument("--disable-webgl")  # 可能导致白屏
+    chrome_options.add_argument("--start-maximized")
     
     # 显式指定 Chrome 二进制位置 (config.py 中已适配 Mac/Linux/Windows)
     if CHROME_BINARY and os.path.exists(CHROME_BINARY):

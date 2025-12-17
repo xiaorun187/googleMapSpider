@@ -1,380 +1,286 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Operation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Maps 商家数据提取</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f7f9;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 30px;
-        }
-        #extraction-form {
-            max-width: 500px;
-            margin: 0 auto 30px;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        #extraction-form label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-            font-weight: bold;
-        }
-        #extraction-form input {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        #extraction-form button, #extract-contacts-btn {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
-            margin-top: 10px;
-        }
-        #extraction-form button:hover, #extract-contacts-btn:hover {
-            background-color: #0056b3;
-        }
-        #progress {
-            text-align: center;
-            margin: 20px 0;
-            color: #666;
-            font-size: 18px;
-        }
-        #business-table {
-            width: 80%;
-            max-width: 1200px;
-            margin: 0 auto;
-            border-collapse: collapse;
-            background-color: #fff;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        #business-table th, #business-table td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-        #business-table th {
-            background-color: #007bff;
-            color: white;
-            font-weight: bold;
-        }
-        #business-table tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        #business-table tr:hover {
-            background-color: #f1f1f1;
-        }
-        #business-table a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        #business-table a:hover {
-            text-decoration: underline;
-        }
-        #download-link {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-        #download-link a {
-            padding: 10px 20px;
-            background-color: #28a745;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-        #download-link a:hover {
-            background-color: #218838;
-        }
-        /* 新增菜单样式 */
-        .menu {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-        }
-        .menu-btn {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .menu-btn:hover {
-            background-color: #0056b3;
-        }
-        .dropdown {
-            position: relative;
-            display: inline-block;
-        }
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            right: 0;
-            background-color: #fff;
-            min-width: 160px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1;
-            border-radius: 4px;
-        }
-        .dropdown-content a {
-            color: #333;
-            padding: 12px 16px;
-            text-decoration: none;
-            display: block;
-        }
-        .dropdown-content a:hover {
-            background-color: #f1f1f1;
-        }
-        .dropdown:hover .dropdown-content {
-            display: block;
-        }
-        /* 修改复选框和标签的样式 */
-        #extraction-form div.remember-checkbox {
-            margin-bottom: 15px;
-        }
-        #extraction-form div.remember-checkbox input[type="checkbox"] {
-            width: auto;
-            display: inline-block;
-            margin-right: 5px;
-            vertical-align: middle; /* 对齐复选框和文字 */
-        }
-        #extraction-form div.remember-checkbox label {
-            display: inline-block;
-            font-weight: normal; /* 去掉标签的加粗 */
-            vertical-align: middle; /* 对齐复选框和文字 */
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 16px; }
+        .container { max-width: 1800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 14px 24px; background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 10px; }
+        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .nav-links { display: flex; gap: 10px; }
+        .nav-links a { padding: 9px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 9px; font-size: 13px; font-weight: 500; transition: all 0.3s; }
+        .nav-links a:hover { transform: translateY(-2px); }
+        .main-content { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: stretch; }
+        .control-panel { background: rgba(255,255,255,0.98); border-radius: 14px; padding: 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+        .data-panel { background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .panel-title { font-size: 15px; font-weight: 600; color: #1a1a2e; margin-bottom: 18px; display: flex; align-items: center; gap: 9px; }
+        .panel-title::before { content: ""; width: 4px; height: 18px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 2px; }
     </style>
     <script src="{{ url_for('static', filename='js/socket.io.js') }}"></script>
 </head>
 <body>
-    <h1>Extract Business Info</h1>
-
-    <div class="menu">
-        <div class="dropdown">
-            <button class="menu-btn">Menu</button>
-            <div class="dropdown-content">
-                <a href="/history">History</a>
-            </div>
-        </div>
+<div class="container">
+    <header class="header">
+        <h1><span class="logo-icon">🗺️</span>Google Maps 商家数据提取</h1>
+        <nav class="nav-links"><a href="/history">📋 历史记录</a><a href="/send_email_page">✉️ 发送邮件</a></nav>
+    </header>
+    <div class="main-content">
+        <aside class="control-panel" id="control-panel"></aside>
+        <main class="data-panel" id="data-panel"></main>
     </div>
-
-    <form id="extraction-form">
-        <label for="url">Google Maps URL:</label>
-        <input type="text" id="url" name="url" required>
-        <label for="limit">Limit (number of businesses):</label>
-        <input type="number" id="limit" name="limit" value="10" min="1">
-        <label for="proxy">Proxy (optional, e.g., username:password@host:port or host:port):</label>
-        <input type="text" id="proxy" name="proxy">
-        <div class="remember-checkbox">
-            <input type="checkbox" id="remember_position" name="remember_position" checked>
-            <label for="remember_position">记住上次的拉取的位置</label>
-        </div>
-        <button type="submit">Start Extraction</button>
-        <button type="button" id="extract-contacts-btn" style="display: none;">Extract Contact Info</button>
-        <button type="button" id="send-email-btn">Send Email</button>
-    </form>
-
-    <div id="progress">Progress: 0% - Waiting...</div>
-    <table id="business-table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Website</th>
-                <th>Emails</th>
-                <th>Phones</th>
-                <th>Facebook</th>
-                <th>Twitter</th>
-                <th>Instagram</th>
-                <th>LinkedIn</th>
-                <th>WhatsApp</th>
-                <th>YouTube</th>
-            </tr>
-        </thead>
-        <tbody id="business-table-body">
-        </tbody>
-    </table>
-    <div id="download-link" style="display: none;">
-        <a href="#">Download CSV</a>
-    </div>
-
-    <script>
-        const socket = io();
-        const form = document.getElementById('extraction-form');
-        const progressDiv = document.getElementById('progress');
-        const tableBody = document.getElementById('business-table-body');
-        const downloadLink = document.getElementById('download-link');
-        const extractContactsBtn = document.getElementById('extract-contacts-btn');
-        const sendEmailBtn = document.getElementById('send-email-btn');
-        let latestCsvFile = null;
-
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const url = document.getElementById('url').value;
-            const limit = document.getElementById('limit').value;
-            const proxy = document.getElementById('proxy').value;
-            const rememberPosition = document.getElementById('remember_position').checked; // 获取复选框状态
-
-            tableBody.innerHTML = '';
-            downloadLink.style.display = 'none';
-            extractContactsBtn.style.display = 'none';
-            progressDiv.textContent = 'Progress: 0% - Task started...';
-
-            fetch('/start_extraction', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `url=${encodeURIComponent(url)}&limit=${encodeURIComponent(limit)}&proxy=${encodeURIComponent(proxy)}&remember_position=${rememberPosition ? 'on' : 'off'}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status !== 'success') {
-                    progressDiv.textContent = `Error: ${data.message}`;
-                }
-            })
-            .catch(error => {
-                progressDiv.textContent = `Workspace error: ${error}`;
-            });
-        });
-
-        extractContactsBtn.addEventListener('click', function() {
-            const proxy = document.getElementById('proxy').value;
-            progressDiv.textContent = 'Progress: 0% - Contact extraction started...';
-
-            fetch('/extract_contacts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `proxy=${encodeURIComponent(proxy)}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status !== 'success') {
-                    progressDiv.textContent = `Error: ${data.message}`;
-                }
-            })
-            .catch(error => {
-                progressDiv.textContent = `Workspace error: ${error}`;
-            });
-        });
-
-        function formatField(value) {
-            if (Array.isArray(value)) {
-                return value.length ? value.map(v => v.includes('http') ? `<a href="${v}" target="_blank">${v}</a>` : v).join(', ') : 'N/A';
-            }
-            return value ? (value.includes('http') ? `<a href="${value}" target="_blank">${value}</a>` : value) : 'N/A';
-        }
-
-        socket.on('progress_update', function(data) {
-            progressDiv.textContent = `Progress: ${data.progress}% - ${data.message || ''}`;
-
-            if (data.business_data) {
-                const row = document.createElement('tr');
-                row.dataset.name = data.business_data.name;
-                row.innerHTML = `
-                    <td>${data.business_data.name || 'N/A'}</td>
-                    <td>${formatField(data.business_data.website)}</td>
-                    <td>${formatField(data.business_data.emails)}</td>
-                    <td>${formatField(data.business_data.phones)}</td>
-                    <td>${formatField(data.business_data.facebook)}</td>
-                    <td>${formatField(data.business_data.twitter)}</td>
-                    <td>${formatField(data.business_data.instagram)}</td>
-                    <td>${formatField(data.business_data.linkedin)}</td>
-                    <td>${formatField(data.business_data.whatsapp)}</td>
-                    <td>${formatField(data.business_data.youtube)}</td>
-                `;
-                tableBody.appendChild(row);
-            }
-
-            if (data.progress === 100) {
-                if (data.csv_file) {
-                    downloadLink.style.display = 'block';
-                    downloadLink.querySelector('a').href = `/download/${data.csv_file}`;
-                    downloadLink.querySelector('a').textContent = `Download CSV (${data.csv_file})`;
-                }
-                extractContactsBtn.style.display = 'block';
-            }
-        });
-
-        socket.on('contact_update', function(data) {
-            progressDiv.textContent = `Progress: ${data.progress}% - ${data.message || ''}`;
-
-            if (data.business_data) {
-                const existingRow = tableBody.querySelector(`tr[data-name="${data.business_data.name}"]`);
-                if (existingRow) {
-                    existingRow.innerHTML = `
-                        <td>${data.business_data.name || 'N/A'}</td>
-                        <td>${formatField(data.business_data.website)}</td>
-                        <td>${formatField(data.business_data.emails)}</td>
-                        <td>${formatField(data.business_data.phones)}</td>
-                        <td>${formatField(data.business_data.facebook)}</td>
-                        <td>${formatField(data.business_data.twitter)}</td>
-                        <td>${formatField(data.business_data.instagram)}</td>
-                        <td>${formatField(data.business_data.linkedin)}</td>
-                        <td>${formatField(data.business_data.whatsapp)}</td>
-                        <td>${formatField(data.business_data.youtube)}</td>
-                    `;
-                }
-            }
-
-            if (data.progress === 100 && data.csv_file) {
-                downloadLink.style.display = 'block';
-                downloadLink.querySelector('a').href = `/download/${data.csv_file}`;
-                downloadLink.querySelector('a').textContent = `Download CSV (${data.csv_file})`;
-            }
-        });
-
-        sendEmailBtn.addEventListener('click', function() {
-            const emailList = [];
-            const rows = tableBody.querySelectorAll('tr');
-            rows.forEach(row => {
-                const emailCell = row.cells[2];
-                const emailsText = emailCell.textContent.trim();
-                if (emailsText !== 'N/A') {
-                    const emails = emailsText.split(', ');
-                    emails.forEach(email => {
-                        if (email && !email.includes('http')) {
-                            emailList.push(email);
-                        }
-                    });
-                }
-            });
-
-            const uniqueEmails = [...new Set(emailList)];
-            if (uniqueEmails.length >=0) {
-                    //const emailsParam = encodeURIComponent(JSON.stringify(uniqueEmails));
-                    const emailsParam = uniqueEmails.join(',');  // 使用逗号分隔
-                    const redirectUrl = `/send_email_page?emails=${emailsParam}`;
-                    console.log(`Redirecting to: ${redirectUrl}`);  // 调试信息
-                    window.location.href = redirectUrl;
-            } else {
-                progressDiv.textContent = 'No valid emails found to send';
-            }
-        });
-    </script>
+</div>
 </body>
 </html>
+<style>
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
+    .form-group input[type="text"], .form-group input[type="number"] { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 13px; transition: all 0.3s; background: #f8fafc; }
+    .form-group input:focus { outline: none; border-color: #667eea; background: white; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+    .checkbox-group { display: flex; align-items: center; gap: 9px; padding: 11px 14px; background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0; cursor: pointer; }
+    .checkbox-group:hover { border-color: #667eea; }
+    .checkbox-group input { width: 16px; height: 16px; accent-color: #667eea; }
+    .checkbox-group label { font-size: 13px; }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 7px; }
+    .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+    .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+    .btn-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .progress-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid #f1f5f9; }
+    .progress-label { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 8px; text-transform: uppercase; }
+    .progress-bar-container { background: #e2e8f0; border-radius: 10px; height: 10px; overflow: hidden; margin-bottom: 10px; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px; transition: width 0.4s; }
+    .progress-text { font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 7px; }
+    .spinner { width: 13px; height: 13px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .data-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-bottom: 1px solid #e2e8f0; border-radius: 14px 14px 0 0; }
+    .data-header h2 { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+    .data-stats { display: flex; gap: 18px; }
+    .stat-item { text-align: center; }
+    .stat-value { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
+    .toolbar { display: flex; gap: 10px; padding: 10px 18px; background: #fafbfc; border-bottom: 1px solid #e2e8f0; }
+    .search-box { flex: 1; position: relative; }
+    .search-box input { width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
+    .search-box input:focus { outline: none; border-color: #667eea; }
+    .search-box::before { content: "🔍"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; }
+    .view-toggle { display: flex; background: #e2e8f0; border-radius: 6px; padding: 3px; }
+    .view-toggle button { padding: 5px 12px; border: none; background: transparent; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .view-toggle button.active { background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .data-list { padding: 14px 18px; flex: 1; display: flex; flex-direction: column; }
+    .business-card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; transition: all 0.2s; position: relative; }
+    .business-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, #667eea, #764ba2); opacity: 0; transition: opacity 0.2s; border-radius: 10px 0 0 10px; }
+    .business-card:hover { border-color: #667eea; box-shadow: 0 3px 10px rgba(102,126,234,0.12); }
+    .business-card:hover::before { opacity: 1; }
+    .business-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .business-name { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+    .business-index { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .business-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .info-item { display: flex; align-items: flex-start; gap: 8px; }
+    .info-icon { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: #f0f4ff; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
+    .info-content { flex: 1; min-width: 0; }
+    .info-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; }
+    .info-value { font-size: 12px; color: #334155; word-break: break-all; line-height: 1.4; }
+    .info-value a { color: #667eea; text-decoration: none; }
+    .info-value a:hover { text-decoration: underline; }
+    .info-value.empty { color: #cbd5e1; font-style: italic; }
+    .social-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
+    .social-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 12px; font-size: 11px; font-weight: 500; text-decoration: none; transition: all 0.2s; }
+    .social-tag.facebook { background: #e7f3ff; color: #1877f2; }
+    .social-tag.twitter { background: #e8f5fd; color: #1da1f2; }
+    .social-tag.instagram { background: #fce4ec; color: #e4405f; }
+    .social-tag.linkedin { background: #e8f4f8; color: #0077b5; }
+    .social-tag.youtube { background: #ffebee; color: #ff0000; }
+    .social-tag.whatsapp { background: #e8f5e9; color: #25d366; }
+    .social-tag:hover { transform: scale(1.05); }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th { background: #f8fafc; padding: 12px 14px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+    .data-table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; color: #334155; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table tr:hover td { background: #f8fafc; }
+    .data-table a { color: #667eea; }
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 4px; padding: 10px 18px; border-top: 1px solid #e2e8f0; }
+    .pagination button { padding: 5px 11px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s; }
+    .pagination button:hover:not(:disabled) { border-color: #667eea; color: #667eea; }
+    .pagination button.active { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-color: transparent; }
+    .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .page-info { font-size: 12px; color: #64748b; margin: 0 8px; }
+    .download-section { padding: 10px 18px; background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border-top: 1px solid #d1fae5; display: none; justify-content: space-between; align-items: center; border-radius: 0 0 14px 14px; }
+    .download-section.show { display: flex; }
+    .download-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 12px; }
+    .download-btn:hover { transform: translateY(-2px); }
+    .empty-state { text-align: center; padding: 36px 20px; color: #94a3b8; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    @media (max-width: 1200px) { .main-content { grid-template-columns: 1fr; } .business-info { grid-template-columns: 1fr 1fr; } }
+</style>
+<script>
+document.getElementById('control-panel').innerHTML = `
+    <h3 class="panel-title">提取设置</h3>
+    <form id="extraction-form">
+        <div class="form-group"><label>🏙️ 城市名称</label><input type="text" id="city" name="city" placeholder="例如: Atlanta, New York, Los Angeles..." required></div>
+        <div class="form-group"><label>🛍️ 商品/服务名称</label><input type="text" id="product" name="product" placeholder="例如: sofa, restaurant, hotel..." required></div>
+        <input type="hidden" id="url" name="url">
+        <div class="form-group"><label>提取数量</label><input type="number" id="limit" name="limit" value="10" min="1" max="500"></div>
+        <div class="form-group"><label>代理服务器 (可选)</label><input type="text" id="proxy" name="proxy" placeholder="user:pass@host:port"></div>
+        <div class="form-group"><div class="checkbox-group"><input type="checkbox" id="remember_position"><label for="remember_position">记住上次提取位置</label></div></div>
+        <button type="submit" class="btn btn-primary" id="start-btn">🚀 开始提取</button>
+        <button type="button" class="btn btn-success" id="extract-contacts-btn" style="display:none;">📧 提取联系方式</button>
+        <button type="button" class="btn btn-warning" id="send-email-btn">✉️ 批量发送邮件</button>
+    </form>
+    <div class="progress-section">
+        <div class="progress-label">任务进度</div>
+        <div class="progress-bar-container"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
+        <p class="progress-text" id="progress-text">等待开始...</p>
+    </div>
+`;
+
+document.getElementById('data-panel').innerHTML = `
+    <div class="data-header">
+        <h2>📊 提取结果</h2>
+        <div class="data-stats">
+            <div class="stat-item"><div class="stat-value" id="total-count">0</div><div class="stat-label">总数</div></div>
+            <div class="stat-item"><div class="stat-value" id="email-count">0</div><div class="stat-label">有邮箱</div></div>
+            <div class="stat-item"><div class="stat-value" id="website-count">0</div><div class="stat-label">有网站</div></div>
+        </div>
+    </div>
+    <div class="toolbar">
+        <div class="search-box"><input type="text" id="search-input" placeholder="搜索商家名称、网站、邮箱..."></div>
+        <div class="view-toggle"><button class="active" data-view="card">卡片</button><button data-view="table">表格</button></div>
+    </div>
+    <div class="data-list" id="data-list"></div>
+    <div class="pagination" id="pagination"></div>
+    <div class="download-section" id="download-section">
+        <span>✅ 数据提取完成</span>
+        <a href="#" class="download-btn" id="download-btn">📥 下载 Excel</a>
+    </div>
+`;
+
+const socket = io();
+let businessData = [], currentView = 'card', searchQuery = '', currentPage = 1, pageSize = 10;
+
+function updateStats() {
+    document.getElementById('total-count').textContent = businessData.length;
+    document.getElementById('email-count').textContent = businessData.filter(b => b.emails && b.emails.length > 0).length;
+    document.getElementById('website-count').textContent = businessData.filter(b => b.website).length;
+}
+
+function formatValue(v) {
+    if (!v || (Array.isArray(v) && !v.length)) return '<span class="empty">-</span>';
+    if (Array.isArray(v)) return v.map(x => x && x.includes && x.includes('http') ? `<a href="${x}" target="_blank">${x}</a>` : x).join(', ');
+    if (v.includes && v.includes('http')) { const s = v.length > 35 ? v.slice(0,35)+'...' : v; return `<a href="${v}" target="_blank" title="${v}">${s}</a>`; }
+    return v;
+}
+
+function renderCard(b, i) {
+    const tags = [];
+    if (b.facebook) tags.push(`<a href="${b.facebook}" target="_blank" class="social-tag facebook">📘 Facebook</a>`);
+    if (b.twitter) tags.push(`<a href="${b.twitter}" target="_blank" class="social-tag twitter">🐦 Twitter</a>`);
+    if (b.instagram) tags.push(`<a href="${b.instagram}" target="_blank" class="social-tag instagram">📷 Instagram</a>`);
+    if (b.linkedin) tags.push(`<a href="${b.linkedin}" target="_blank" class="social-tag linkedin">💼 LinkedIn</a>`);
+    if (b.youtube) tags.push(`<a href="${b.youtube}" target="_blank" class="social-tag youtube">▶️ YouTube</a>`);
+    if (b.whatsapp) tags.push(`<a href="${b.whatsapp}" target="_blank" class="social-tag whatsapp">💬 WhatsApp</a>`);
+    return `<div class="business-card"><div class="business-card-header"><span class="business-name">${b.name||'Unknown'}</span><span class="business-index">#${i+1}</span></div>
+        <div class="business-info">
+            <div class="info-item"><span class="info-icon">🌐</span><div class="info-content"><div class="info-label">网站</div><div class="info-value">${formatValue(b.website)}</div></div></div>
+            <div class="info-item"><span class="info-icon">📧</span><div class="info-content"><div class="info-label">邮箱</div><div class="info-value">${formatValue(b.emails)}</div></div></div>
+            <div class="info-item"><span class="info-icon">📞</span><div class="info-content"><div class="info-label">电话</div><div class="info-value">${formatValue(b.phones)}</div></div></div>
+        </div>${tags.length ? `<div class="social-tags">${tags.join('')}</div>` : ''}</div>`;
+}
+
+function renderTable(data, startIdx) {
+    return `<table class="data-table"><thead><tr><th>#</th><th>名称</th><th>网站</th><th>邮箱</th><th>电话</th><th>社交</th></tr></thead>
+        <tbody>${data.map((b,i) => `<tr><td>${startIdx+i+1}</td><td>${b.name||'-'}</td><td>${formatValue(b.website)}</td><td>${formatValue(b.emails)}</td><td>${formatValue(b.phones)}</td>
+        <td>${[b.facebook&&'FB',b.instagram&&'IG',b.twitter&&'TW',b.linkedin&&'LI'].filter(Boolean).join(', ')||'-'}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function renderPagination(total) {
+    const pages = Math.ceil(total / pageSize);
+    const pag = document.getElementById('pagination');
+    if (pages <= 1) { pag.innerHTML = ''; return; }
+    let html = `<button ${currentPage===1?'disabled':''} onclick="goPage(1)">首页</button>
+        <button ${currentPage===1?'disabled':''} onclick="goPage(${currentPage-1})">‹</button>`;
+    for (let i = Math.max(1, currentPage - 2); i <= Math.min(pages, currentPage + 2); i++) 
+        html += `<button class="${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+    html += `<span class="page-info">${currentPage} / ${pages}</span>
+        <button ${currentPage===pages?'disabled':''} onclick="goPage(${currentPage+1})">›</button>
+        <button ${currentPage===pages?'disabled':''} onclick="goPage(${pages})">末页</button>`;
+    pag.innerHTML = html;
+}
+
+window.goPage = function(p) { currentPage = p; renderData(); };
+
+function renderData() {
+    let filtered = businessData;
+    if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filtered = businessData.filter(b => (b.name && b.name.toLowerCase().includes(q)) || (b.website && b.website.toLowerCase().includes(q)) || (b.emails && b.emails.some(e => e.toLowerCase().includes(q))));
+    }
+    const list = document.getElementById('data-list');
+    if (!filtered.length) {
+        list.innerHTML = `<div class="empty-state"><div class="empty-icon">${searchQuery?'🔍':'📭'}</div><div>${searchQuery?'未找到匹配结果':'暂无数据，请输入城市和商品名称开始提取'}</div></div>`;
+        document.getElementById('pagination').innerHTML = '';
+    } else {
+        const start = (currentPage - 1) * pageSize, pageData = filtered.slice(start, start + pageSize);
+        list.innerHTML = currentView === 'card' ? pageData.map((b, i) => renderCard(b, start + i)).join('') : renderTable(pageData, start);
+        renderPagination(filtered.length);
+    }
+    updateStats();
+}
+
+document.getElementById('extraction-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const city = document.getElementById('city').value.trim();
+    const product = document.getElementById('product').value.trim();
+    if (!city || !product) { alert('请输入城市名称和商品名称'); return; }
+    
+    businessData = []; currentPage = 1; renderData();
+    document.getElementById('download-section').classList.remove('show');
+    document.getElementById('extract-contacts-btn').style.display = 'none';
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('start-btn').innerHTML = '<span class="spinner"></span> 提取中...';
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-text').innerHTML = `<span class="spinner"></span> 正在定位城市: ${city}，搜索: ${product}...`;
+    fetch('/start_extraction', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `city=${encodeURIComponent(city)}&product=${encodeURIComponent(product)}&limit=${document.getElementById('limit').value}&proxy=${encodeURIComponent(document.getElementById('proxy').value)}&remember_position=${document.getElementById('remember_position').checked?'on':'off'}`
+    }).then(r => r.json()).then(d => { if (d.status !== 'success') { document.getElementById('progress-text').textContent = '错误: ' + d.message; document.getElementById('start-btn').disabled = false; document.getElementById('start-btn').textContent = '🚀 开始提取'; }});
+});
+
+document.getElementById('extract-contacts-btn').addEventListener('click', function() {
+    this.disabled = true; this.innerHTML = '<span class="spinner"></span> 提取中...';
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-text').innerHTML = '<span class="spinner"></span> 正在提取联系方式...';
+    fetch('/extract_contacts', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `proxy=${encodeURIComponent(document.getElementById('proxy').value)}` });
+});
+
+document.getElementById('search-input').addEventListener('input', function() { searchQuery = this.value; currentPage = 1; renderData(); });
+document.querySelectorAll('.view-toggle button').forEach(btn => btn.addEventListener('click', function() { document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active')); this.classList.add('active'); currentView = this.dataset.view; renderData(); }));
+document.getElementById('send-email-btn').addEventListener('click', function() { const emails = businessData.filter(b => b.emails && b.emails.length).flatMap(b => b.emails).filter(e => e && !e.includes('http')); window.location.href = `/send_email_page?emails=${[...new Set(emails)].join(',')}`; });
+
+socket.on('progress_update', function(d) {
+    document.getElementById('progress-bar').style.width = d.progress + '%';
+    document.getElementById('progress-text').innerHTML = d.progress < 100 ? `<span class="spinner"></span> ${d.message}` : d.message;
+    if (d.business_data) { businessData.push(d.business_data); renderData(); }
+    if (d.progress === 100) {
+        if (d.data) { businessData = d.data; currentPage = 1; renderData(); }
+        if (d.csv_file) { document.getElementById('download-btn').href = `/download/${d.csv_file}`; document.getElementById('download-btn').textContent = `📥 下载 ${d.csv_file}`; document.getElementById('download-section').classList.add('show'); }
+        document.getElementById('extract-contacts-btn').style.display = 'block'; document.getElementById('extract-contacts-btn').disabled = false; document.getElementById('extract-contacts-btn').innerHTML = '📧 提取联系方式';
+        document.getElementById('start-btn').disabled = false; document.getElementById('start-btn').innerHTML = '🚀 开始提取';
+    }
+});
+
+socket.on('contact_update', function(d) {
+    document.getElementById('progress-bar').style.width = d.progress + '%';
+    document.getElementById('progress-text').innerHTML = d.progress < 100 ? `<span class="spinner"></span> ${d.message}` : d.message;
+    if (d.business_data) { const idx = businessData.findIndex(b => b.name === d.business_data.name); if (idx !== -1) { businessData[idx] = d.business_data; renderData(); }}
+    if (d.progress === 100) {
+        if (d.data) { businessData = d.data; currentPage = 1; renderData(); }
+        if (d.csv_file) { document.getElementById('download-btn').href = `/download/${d.csv_file}`; document.getElementById('download-section').classList.add('show'); }
+        document.getElementById('extract-contacts-btn').disabled = false; document.getElementById('extract-contacts-btn').innerHTML = '📧 提取联系方式';
+    }
+});
+
+renderData();
+</script>

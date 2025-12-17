@@ -86,10 +86,16 @@ def start_extraction():
     if not session.get('logged_in'):
         return jsonify({"status": "error", "message": "请先登录"}), 401
 
-    url = request.form.get('url')
+    # 支持新的城市+商品模式
+    city = request.form.get('city')
+    product = request.form.get('product')
+    url = request.form.get('url')  # 保留旧的URL模式兼容
     limit = request.form.get('limit')
     proxy = request.form.get('proxy')
     remember_position = request.form.get('remember_position') == 'on'  # 获取复选框状态
+    
+    # 调试日志
+    print(f"[DEBUG] 收到提取请求 - city: {city}, product: {product}, URL: {url}, limit: {limit}, proxy: {proxy}, remember_position: {remember_position}", file=sys.stderr)
 
     try:
         limit = int(limit)
@@ -98,12 +104,16 @@ def start_extraction():
     except (ValueError, TypeError):
         return jsonify({"status": "error", "message": "limit 必须是一个有效的正整数"}), 400
 
+    # 验证必须有城市和商品，或者有URL
+    if not url and (not city or not product):
+        return jsonify({"status": "error", "message": "请输入城市名称和商品名称"}), 400
+
     terminate_all_tasks()
     socketio.emit('progress_update', {'progress': 0, 'message': '正在清理旧任务...'})
 
     task_id = f"extract_{os.urandom(4).hex()}"
 
-    def background_extraction(search_url, limit, proxy=None, task_id=task_id,remember_position=False):
+    def background_extraction(city, product, url, limit, proxy=None, task_id=task_id, remember_position=False):
         driver = None
         with app.app_context():
             try:
@@ -112,7 +122,7 @@ def start_extraction():
                 socketio.emit('progress_update', {'progress': 0, 'message': '正在初始化浏览器...' if not proxy_info else proxy_info})
 
                 extracted_data = []
-                for progress, current, business_data, message in extract_business_info(driver, search_url, limit,remember_position):
+                for progress, current, business_data, message in extract_business_info(driver, url, limit, remember_position, city, product):
                     if business_data:
                         extracted_data.append(business_data)
                     socketio.emit('progress_update', {
@@ -149,7 +159,7 @@ def start_extraction():
                 if task_id in running_tasks:
                     del running_tasks[task_id]
 
-    thread = threading.Thread(target=background_extraction, args=(url, limit, proxy, task_id,remember_position))
+    thread = threading.Thread(target=background_extraction, args=(city, product, url, limit, proxy, task_id, remember_position))
     thread.daemon = True
     thread.start()
 
@@ -190,7 +200,8 @@ def extract_contacts():
                 socketio.emit('contact_update', {
                     'progress': 100,
                     'csv_file': csv_filename,
-                    'message': '联系方式提取完成'
+                    'message': '联系方式提取完成',
+                    'data': business_data_store  # 返回完整数据，确保界面与Excel一致
                 })
 
                 # 保存到数据库

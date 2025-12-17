@@ -5,52 +5,34 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
-import mysql.connector
 
-from config import DB_CONFIG
+# 导入SQLite数据库模块
+import db as db_module
 
 
-def create_table():
-    cnx = mysql.connector.connect(**DB_CONFIG)
-    cursor = cnx.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS last_extraction_positions (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            url TEXT NOT NULL,
-            last_position INTEGER,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY (url)
-        )
-    ''')
-    cnx.commit()
-    cursor.close()
-    cnx.close()
-
-def get_last_position(url):
+def highlight_element(driver, element, color="red", border_width="3px", duration=0.5):
+    """高亮显示元素，用于调试和可视化"""
     try:
-        cnx = mysql.connector.connect(**DB_CONFIG)
-        cursor = cnx.cursor()
-        query = "SELECT last_position FROM last_extraction_positions WHERE url = %s"
-        cursor.execute(query, (url,))
-        result = cursor.fetchone()
-        cursor.close()
-        cnx.close()
-        return result[0] if result else 0  # 如果没有找到记录，默认从 0 开始
-    except mysql.connector.Error as err:
-        print(f"Error getting last position: {err}", file=sys.stderr)
-        return 0
+        # 保存原始样式
+        original_style = element.get_attribute('style') or ''
+        # 添加高亮样式
+        highlight_style = f"border: {border_width} solid {color} !important; background-color: rgba(255,255,0,0.3) !important; box-shadow: 0 0 10px {color} !important;"
+        driver.execute_script(f"arguments[0].setAttribute('style', '{highlight_style}');", element)
+        time.sleep(duration)
+        # 恢复原始样式
+        driver.execute_script(f"arguments[0].setAttribute('style', '{original_style}');", element)
+    except Exception as e:
+        print(f"高亮元素失败: {e}", file=sys.stderr)
 
-def save_last_position(url, last_position):
+
+def highlight_element_keep(driver, element, color="red", border_width="3px"):
+    """高亮显示元素并保持（不恢复原样式）"""
     try:
-        cnx = mysql.connector.connect(**DB_CONFIG)
-        cursor = cnx.cursor()
-        query = "INSERT INTO last_extraction_positions (url, last_position) VALUES (%s, %s) ON DUPLICATE KEY UPDATE last_position = %s, timestamp = CURRENT_TIMESTAMP"
-        cursor.execute(query, (url, last_position, last_position))
-        cnx.commit()
-        cursor.close()
-        cnx.close()
-    except mysql.connector.Error as err:
-        print(f"Error saving last position: {err}", file=sys.stderr)
+        highlight_style = f"border: {border_width} solid {color} !important; background-color: rgba(255,255,0,0.3) !important; box-shadow: 0 0 10px {color} !important;"
+        driver.execute_script(f"arguments[0].setAttribute('style', arguments[0].getAttribute('style') + ';{highlight_style}');", element)
+    except Exception as e:
+        print(f"高亮元素失败: {e}", file=sys.stderr)
+
 
 def wait_for_element(driver, selector, timeout=5):
     try:
@@ -141,29 +123,94 @@ def extract_single_business_info(driver):
         print(f"提取单个商家信息时出错: {e}", file=sys.stderr)
         return results, f"提取单个商家信息时出错: {e}"
 
-def extract_business_info(driver, search_url, limit=500, remember_position=False):
-    print(f"正在访问 URL: {search_url}，目标提取数量: {limit}，记住位置: {remember_position}")
-    start_index = 0
-    if remember_position:
-        start_index = get_last_position(search_url)
-        print(f"记住位置已启用，从索引 {start_index} 开始提取。")
-        limit=limit+start_index
-    try:
-        driver.get(search_url)
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'body'))
-        )
-    except Exception as e:
-        print(f"访问 URL 失败: {e}", file=sys.stderr)
-        yield 0, None, None, f"访问 URL 失败: {e}"
-        return
+def navigate_to_city_and_search(driver, city, product):
+    """
+    两步搜索：先定位到城市，再搜索商品
+    """
+    print(f"开始两步搜索：城市={city}, 商品={product}")
+    
+    # 第一步：打开 Google Maps 并搜索城市
+    yield 5, None, None, f"正在打开 Google Maps..."
+    driver.get("https://www.google.com/maps")
+    time.sleep(3)
+    
+    # 等待搜索框出现
+    search_box = wait_for_element(driver, 'input#searchboxinput', timeout=10)
+    if not search_box:
+        yield 0, None, None, "未找到 Google Maps 搜索框"
+        return False
+    
+    # 第二步：输入城市名称并搜索
+    yield 10, None, None, f"正在搜索城市: {city}..."
+    search_box.clear()
+    search_box.send_keys(city)
+    search_box.send_keys(Keys.ENTER)
+    time.sleep(4)  # 等待地图定位到城市
+    
+    # 第三步：清空搜索框，输入商品名称
+    yield 15, None, None, f"已定位到 {city}，正在搜索: {product}..."
+    search_box = wait_for_element(driver, 'input#searchboxinput', timeout=10)
+    if search_box:
+        search_box.clear()
+        time.sleep(0.5)
+        search_box.send_keys(product)
+        search_box.send_keys(Keys.ENTER)
+        time.sleep(4)  # 等待搜索结果加载
+    
+    yield 20, None, None, f"搜索完成，正在加载 {city} 的 {product} 结果..."
+    return True
 
-    if "/place/" in search_url:
-        print("检测到单个商家页面，直接提取信息...")
-        results, message = extract_single_business_info(driver)
-        yield 50, None, None, "正在提取单个商家数据"
-        yield 100, None, results[0] if results else None, message
-        return
+
+def extract_business_info(driver, search_url, limit=500, remember_position=False, city=None, product=None):
+    """
+    提取商家信息
+    如果提供了 city 和 product，则使用两步搜索（先定位城市再搜索商品）
+    否则使用传统的 URL 直接访问方式
+    """
+    start_index = 0
+    
+    # 新模式：城市 + 商品两步搜索
+    if city and product:
+        print(f"使用两步搜索模式：城市={city}, 商品={product}")
+        search_key = f"{product}_in_{city}"
+        
+        if remember_position:
+            saved_position = db_module.get_last_position(search_key)
+            start_index = saved_position if saved_position is not None else 0
+            print(f"记住位置已启用，从索引 {start_index} 开始提取。")
+            limit = limit + start_index
+        
+        # 执行两步搜索
+        for progress, current, data, message in navigate_to_city_and_search(driver, city, product):
+            yield progress, current, data, message
+            if data is False:  # 搜索失败
+                return
+    else:
+        # 旧模式：直接访问 URL
+        print(f"正在访问 URL: {search_url}，目标提取数量: {limit}，记住位置: {remember_position}")
+        
+        if remember_position and search_url:
+            saved_position = db_module.get_last_position(search_url)
+            start_index = saved_position if saved_position is not None else 0
+            print(f"记住位置已启用，从索引 {start_index} 开始提取。")
+            limit = limit + start_index
+        
+        try:
+            driver.get(search_url)
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'body'))
+            )
+        except Exception as e:
+            print(f"访问 URL 失败: {e}", file=sys.stderr)
+            yield 0, None, None, f"访问 URL 失败: {e}"
+            return
+
+        if search_url and "/place/" in search_url:
+            print("检测到单个商家页面，直接提取信息...")
+            results, message = extract_single_business_info(driver)
+            yield 50, None, None, "正在提取单个商家数据"
+            yield 100, None, results[0] if results else None, message
+            return
 
     print("开始滚动页面以加载更多商家...")
     business_links = []
@@ -194,6 +241,9 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 continue
             name = name.replace('Visited link', '').strip()
 
+            # 高亮当前要点击的商家链接
+            highlight_element(driver, link, color="blue", border_width="4px", duration=0.8)
+            
             print(f"点击商家: {name}")
             ActionChains(driver).move_to_element(link).click().perform()
             time.sleep(3)  # 确保页面加载
@@ -211,6 +261,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             if not info_panel:
                 print(f"未找到 {name} 的信息面板，跳过")
                 continue
+            # 高亮信息面板
+            highlight_element(driver, info_panel, color="purple", border_width="3px", duration=0.3)
             print(f"找到 {name} 的信息面板")
 
             business_data = {'name': name, 'website': None}
@@ -218,6 +270,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             # 精准提取网站
             website_elem = wait_for_element(driver, 'a[aria-label*="Website:"], a[data-item-id="authority"]', timeout=3)
             if website_elem:
+                # 高亮网站元素
+                highlight_element(driver, website_elem, color="green", border_width="3px", duration=0.5)
                 href = website_elem.get_attribute('href')
                 business_data['website'] = href
                 print(f"提取到网站: {href}")
@@ -225,6 +279,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 print(f"未找到 {name} 的网站元素，使用备用选择器")
                 website_elem = wait_for_element(driver, 'a[href^="http"]:not([href*="google.com"])', timeout=3)
                 if website_elem:
+                    # 高亮备用网站元素
+                    highlight_element(driver, website_elem, color="green", border_width="3px", duration=0.5)
                     href = website_elem.get_attribute('href')
                     business_data['website'] = href
                     print(f"备用选择器提取到网站: {href}")
@@ -232,6 +288,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             business_data['phones'] = []  # 初始化 phones 字段
             phone_elem = wait_for_element(driver, 'button[data-item-id^="phone"], div[aria-label*="Phone:"]', timeout=3)
             if phone_elem:
+                # 高亮电话元素
+                highlight_element(driver, phone_elem, color="orange", border_width="3px", duration=0.5)
                 phone_text = phone_elem.text.strip()
                 if phone_text:
                     # 清理常见分隔符，保留数字和加号
@@ -246,6 +304,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                                                      'div.rogA2c span.google-symbols[aria-hidden="true"] + div.Io6YTe',
                                                      timeout=3)
                 if backup_phone_elem:
+                    # 高亮备用电话元素
+                    highlight_element(driver, backup_phone_elem, color="orange", border_width="3px", duration=0.5)
                     phone_text = backup_phone_elem.text.strip()
                     if phone_text:
                         phone = ''.join(c for c in phone_text if c.isdigit() or c == '+')
@@ -262,6 +322,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             continue
         finally:
             if remember_position:
-                save_last_position(search_url, current_index + 1) # 保存当前完成的索引
+                # 使用正确的 key 保存位置
+                position_key = f"{product}_in_{city}" if (city and product) else search_url
+                db_module.save_last_position(position_key, current_index + 1)
 
     yield 100, None, None, "数据提取完成"
