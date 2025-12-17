@@ -84,11 +84,10 @@ scp deploy.zip root@<服务器IP>:/root/
 ```bash
 # 1. 进入目录并解压 (覆盖更新)
 cd /root
-unzip -o deploy_v12.zip -d google_map_spider/
+unzip -o deploy_v13.zip -d google_map_spider/
 
 # 2. 停止旧容器并重新构建启动
-cd google_map_spider/ 
-docker-compose down && docker-compose up --build -d && docker ps
+cd google_map_spider/ && docker-compose down && docker-compose up --build -d
 
 # 3. 验证运行状态
 docker ps
