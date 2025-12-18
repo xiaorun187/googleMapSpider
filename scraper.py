@@ -78,8 +78,8 @@ def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=50
         # 优化：使用JavaScript滚动，更高效
         driver.execute_script("arguments[0].scrollTop += arguments[0].offsetHeight;", scrollable_area)
         
-        # 优化：减少等待时间，使用更智能的等待策略
-        time.sleep(0.5)  # 大幅减少等待时间
+        # 优化：增加等待时间，确保页面有足够时间加载新内容
+        time.sleep(1)  # 增加等待时间到1秒
         
         # 优化：只检查是否有新链接，不再重复添加所有链接
         after_scroll_links = driver.find_elements(By.CSS_SELECTOR, link_selector)
@@ -243,18 +243,11 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
     total = len(business_links)
     print(f"共有 {total} 个商家链接可供提取")
     
-    # 性能优化：预加载所有链接元素，减少重复DOM查询
-    print("预加载所有商家链接元素...")
-    all_links = driver.find_elements(By.CSS_SELECTOR, 'a[role="link"][aria-label], a.hfpxzc, a[href*="/maps/place/"]')
-    link_href_map = {}
-    for link in all_links:
-        href = link.get_attribute('href')
-        if href in business_links:
-            link_href_map[href] = link
-    print(f"预加载完成，找到 {len(link_href_map)} 个匹配的链接元素")
-    
     # 优化：批量保存位置，减少数据库操作次数
     position_save_interval = 10  # 每10个商家保存一次位置
+    
+    # 保存当前的URL，用于返回商家列表页
+    business_list_url = driver.current_url
     
     for i, link_href in enumerate(business_links[start_index:]): # 从上次保存的位置开始遍历
         current_index = start_index + i
@@ -263,11 +256,38 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             break
 
         try:
-            # 优化：使用预加载的链接映射，避免重复DOM查询
-            link = link_href_map.get(link_href)
+            # 返回商家列表页
+            driver.get(business_list_url)
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'a[role="link"][aria-label], a.hfpxzc, a[href*="/maps/place/"]'))
+            )
+            
+            # 优化：增加额外等待时间，确保页面完全加载
+            time.sleep(1)
+            
+            # 重新查找所有商家链接元素
+            link = None
+            max_attempts = 3
+            attempt = 0
+            
+            while attempt < max_attempts and not link:
+                attempt += 1
+                all_links = driver.find_elements(By.CSS_SELECTOR, 'a[role="link"][aria-label], a.hfpxzc, a[href*="/maps/place/"]')
+                
+                # 查找当前要点击的商家链接
+                for l in all_links:
+                    href = l.get_attribute('href')
+                    if href == link_href:
+                        link = l
+                        break
+                
+                if not link and attempt < max_attempts:
+                    print(f"第 {attempt} 次尝试未找到商家链接元素: {link_href}，3秒后重试")
+                    time.sleep(3)
+            
             if not link:
-                print(f"未找到预加载的链接元素: {link_href}")
-                continue  # 跳过，不再尝试重新定位
+                print(f"经过 {max_attempts} 次尝试，未找到商家链接元素: {link_href}")
+                continue  # 跳过，无法找到链接元素
             
             name = link.get_attribute('aria-label') or link.text
             if not name:
@@ -277,13 +297,14 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             print(f"点击商家: {name}")
             ActionChains(driver).move_to_element(link).click().perform()
             
-            # 优化：减少等待时间，使用更高效的等待条件
+            # 优化：等待URL变化，确保页面跳转
             try:
-                WebDriverWait(driver, 3).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="region"][aria-label*="Information for"]'))
+                original_url = driver.current_url
+                WebDriverWait(driver, 10).until(
+                    lambda d: d.current_url != original_url and "/maps/place/" in d.current_url
                 )
             except Exception:
-                print(f"等待 {name} 信息面板超时，跳过")
+                print(f"等待 {name} 页面跳转超时，跳过")
                 continue
 
             # 发送提取状态
@@ -295,13 +316,28 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 print(f"未跳转到商家详情页，当前 URL: {current_url}")
                 continue
 
-            info_panel = wait_for_element(driver, 'div[role="region"][aria-label*="Information for"], div.m6QErb')
-            if not info_panel:
-                print(f"未找到 {name} 的信息面板，跳过")
+            # 等待新的信息面板加载完成
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 'h1.DUwDvf'))
+                )
+            except Exception:
+                print(f"等待 {name} 信息面板超时，跳过")
                 continue
-            print(f"找到 {name} 的信息面板")
 
-            business_data = {'name': name, 'website': None}
+            # 提取当前页面的商家名称
+            current_name_elem = wait_for_element(driver, 'h1.DUwDvf', timeout=3)
+            if not current_name_elem:
+                print(f"未找到当前商家名称，跳过")
+                continue
+            current_name = current_name_elem.text.strip()
+
+            # 确保当前页面的商家信息是新的（与上一个提取的商家不同）
+            if results and current_name == results[-1]['name']:
+                print(f"重复提取同一商家: {current_name}，跳过")
+                continue
+
+            business_data = {'name': current_name, 'website': None}
 
             # 精准提取网站
             website_elem = wait_for_element(driver, 'a[aria-label*="Website:"], a[data-item-id="authority"]', timeout=3)
@@ -310,7 +346,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 business_data['website'] = href
                 print(f"提取到网站: {href}")
             else:
-                print(f"未找到 {name} 的网站元素，使用备用选择器")
+                print(f"未找到 {current_name} 的网站元素，使用备用选择器")
                 website_elem = wait_for_element(driver, 'a[href^="http"]:not([href*="google.com"])', timeout=3)
                 if website_elem:
                     href = website_elem.get_attribute('href')
@@ -328,7 +364,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                         business_data['phones'].append(phone)
                         print(f"提取到手机号: {phone}")
             else:
-                print(f"未找到 {name} 的手机号元素，使用备用选择器")
+                print(f"未找到 {current_name} 的手机号元素，使用备用选择器")
                 # 备用选择器：从页面中寻找包含电话图标的元素
                 backup_phone_elem = wait_for_element(driver,
                                                      'div.rogA2c span.google-symbols[aria-hidden="true"] + div.Io6YTe',
@@ -342,8 +378,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                             print(f"备用选择器提取到手机号: {phone}")
             business_data['phones'] = list(set(business_data['phones']))  # 去重
             results.append(business_data)
-            print(f"成功提取 {name} 的信息: {business_data}")
-            yield progress, name, business_data, f"成功提取: {name}"
+            print(f"成功提取 {current_name} 的信息: {business_data}")
+            yield progress, current_name, business_data, f"成功提取: {current_name}"
 
         except Exception as e:
             print(f"提取 {link_href} 时出错: {e}", file=sys.stderr)

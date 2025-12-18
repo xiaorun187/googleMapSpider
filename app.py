@@ -1,5 +1,5 @@
-from gevent import monkey
-monkey.patch_all()
+# from gevent import monkey
+# monkey.patch_all()
 
 import json
 import sys
@@ -424,4 +424,4 @@ def proxy_gemini_api():
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)

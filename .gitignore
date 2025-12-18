@@ -1,9 +1,61 @@
-/.venv/
-/output/
-output
-.idea
-/.idea/
-/.idea/*
-/logs/
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 输出目录
+output/
+
+# 日志文件
+logs/
 *.log
- /__pycache__/
+*.log.*
+
+# Python编译文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# 环境配置文件
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# IDE配置文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 测试相关
+.pytest_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+
+# Docker相关
+.dockerignore
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 数据库文件
+*.db
+*.sqlite3
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
