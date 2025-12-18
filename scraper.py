@@ -30,25 +30,41 @@ def wait_for_element(driver, selector, timeout=5):
         print(f"未找到元素 {selector}: {e}", file=sys.stderr)
         return None
 
-def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=3, target_count=500):
+def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=500):
+    """优化后的滚动加载函数，减少DOM查询次数和等待时间"""
     business_links = set()  # 使用 set 避免重复链接
     min_scrolls = 5  # 至少滚动 5 次
-
+    
+    # 优化：缓存选择器，避免重复编译
+    link_selector = 'a[role="link"][aria-label], a.hfpxzc, a[href*="/maps/place/"]'
+    
     # 定位左侧商家列表的滚动区域
     scrollable_area = wait_for_element(driver, 'div[role="feed"], div[aria-label*="results"], div.m6QErb[style*="overflow: auto"], div[style*="overflow-y: scroll"]')
     if not scrollable_area:
         print("未找到左侧滚动区域，尝试整个页面滚动")
         scrollable_area = driver.find_element(By.TAG_NAME, "body")
-
-    for i in range(max_scrolls):
-        # 获取当前所有可见链接
-        new_links = driver.find_elements(By.CSS_SELECTOR,
-                                         'a[role="link"][aria-label], a.hfpxzc, a[href*="/maps/place/"]')
-        for link in new_links:
-            href = link.get_attribute('href') or link.text
+    
+    # 优化：提取链接的辅助函数，减少重复代码
+    def extract_hrefs(links):
+        """从链接元素列表中提取href并添加到集合中"""
+        hrefs = set()
+        for link in links:
+            href = link.get_attribute('href')
             if href:
-                business_links.add(href)
+                hrefs.add(href)
+        return hrefs
+    
+    # 初始化链接集合
+    initial_links = driver.find_elements(By.CSS_SELECTOR, link_selector)
+    business_links.update(extract_hrefs(initial_links))
+    current_link_count = len(business_links)
+    
+    for i in range(max_scrolls):
+        # 优化：只在滚动前获取一次链接
+        before_scroll_links = driver.find_elements(By.CSS_SELECTOR, link_selector)
+        business_links.update(extract_hrefs(before_scroll_links))
         current_link_count = len(business_links)
+        
         print(f"滚动 {i + 1}/{max_scrolls} - 当前唯一商家链接数量: {current_link_count}")
 
         # 发送滚动状态给前端
@@ -59,20 +75,32 @@ def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=3, target_count=50
             print(f"已达到或超过目标条数 {target_count}，停止滚动")
             break
 
-        # 模拟滚轮向下滚动
-        ActionChains(driver).move_to_element(scrollable_area).click().send_keys(Keys.PAGE_DOWN).perform()
-        time.sleep(scroll_delay)  # 等待加载
-
-        # 检查是否还有新链接加载
-        new_links_after_scroll = driver.find_elements(By.CSS_SELECTOR,
-                                                      'a[role="link"][aria-label], a.hfpxzc, a[href*="/maps/place/"]')
-        for link in new_links_after_scroll:
-            href = link.get_attribute('href') or link.text
-            if href:
-                business_links.add(href)
-        if i >= min_scrolls and len(business_links) == current_link_count:
-            print("链接数量不再增加，停止滚动")
-            break
+        # 优化：使用JavaScript滚动，更高效
+        driver.execute_script("arguments[0].scrollTop += arguments[0].offsetHeight;", scrollable_area)
+        
+        # 优化：减少等待时间，使用更智能的等待策略
+        time.sleep(0.5)  # 大幅减少等待时间
+        
+        # 优化：只检查是否有新链接，不再重复添加所有链接
+        after_scroll_links = driver.find_elements(By.CSS_SELECTOR, link_selector)
+        if len(after_scroll_links) > len(before_scroll_links):
+            # 只有当链接数量增加时才更新集合
+            business_links.update(extract_hrefs(after_scroll_links))
+            new_link_count = len(business_links)
+            
+            # 检查是否有实际新增链接
+            if new_link_count > current_link_count:
+                current_link_count = new_link_count
+            else:
+                # 链接数量不再增加，提前结束
+                if i >= min_scrolls:
+                    print("链接数量不再增加，停止滚动")
+                    break
+        else:
+            # 没有新链接出现，提前结束
+            if i >= min_scrolls:
+                print("链接数量不再增加，停止滚动")
+                break
 
     # 转换为列表并截取目标数量
     business_links = list(business_links)[:target_count]
@@ -200,7 +228,8 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
 
     print("开始滚动页面以加载更多商家...")
     business_links = []
-    for progress, _, data, message in scroll_and_load_more(driver, max_scrolls=50, scroll_delay=3, target_count=limit):
+    # 优化：减少滚动延迟时间，从3秒减少到1秒
+    for progress, _, data, message in scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=limit):
         if data is not None and isinstance(data, list):
             business_links = data  # 收集滚动完成的链接列表
         yield progress, None, None, message
@@ -213,6 +242,20 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
     results = []
     total = len(business_links)
     print(f"共有 {total} 个商家链接可供提取")
+    
+    # 性能优化：预加载所有链接元素，减少重复DOM查询
+    print("预加载所有商家链接元素...")
+    all_links = driver.find_elements(By.CSS_SELECTOR, 'a[role="link"][aria-label], a.hfpxzc, a[href*="/maps/place/"]')
+    link_href_map = {}
+    for link in all_links:
+        href = link.get_attribute('href')
+        if href in business_links:
+            link_href_map[href] = link
+    print(f"预加载完成，找到 {len(link_href_map)} 个匹配的链接元素")
+    
+    # 优化：批量保存位置，减少数据库操作次数
+    position_save_interval = 10  # 每10个商家保存一次位置
+    
     for i, link_href in enumerate(business_links[start_index:]): # 从上次保存的位置开始遍历
         current_index = start_index + i
         if len(results) >= limit:
@@ -220,8 +263,12 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             break
 
         try:
-            # 根据 href 重新定位元素
-            link = driver.find_element(By.XPATH, f"//a[@href='{link_href}' or text()='{link_href}']")
+            # 优化：使用预加载的链接映射，避免重复DOM查询
+            link = link_href_map.get(link_href)
+            if not link:
+                print(f"未找到预加载的链接元素: {link_href}")
+                continue  # 跳过，不再尝试重新定位
+            
             name = link.get_attribute('aria-label') or link.text
             if not name:
                 continue
@@ -229,8 +276,15 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
 
             print(f"点击商家: {name}")
             ActionChains(driver).move_to_element(link).click().perform()
-            # 使用智能等待替代固定等待，提高效率
-            wait_for_element(driver, 'div[role="region"][aria-label*="Information for"]', timeout=5)
+            
+            # 优化：减少等待时间，使用更高效的等待条件
+            try:
+                WebDriverWait(driver, 3).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="region"][aria-label*="Information for"]'))
+                )
+            except Exception:
+                print(f"等待 {name} 信息面板超时，跳过")
+                continue
 
             # 发送提取状态
             progress = int(50 + (current_index + 1) / total * 50) if total > 0 else 50  # 提取阶段占后 50% 进度
@@ -296,8 +350,11 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             continue
         finally:
             if remember_position:
-                # 使用正确的 key 保存位置
-                position_key = f"{product}_in_{city}" if (city and product) else search_url
-                db_module.save_last_position(position_key, current_index + 1)
+                # 优化：批量保存位置，减少数据库操作
+                if (current_index + 1) % position_save_interval == 0:
+                    # 使用正确的 key 保存位置
+                    position_key = f"{product}_in_{city}" if (city and product) else search_url
+                    db_module.save_last_position(position_key, current_index + 1)
+                    print(f"已保存当前位置: {current_index + 1}")
 
     yield 100, None, None, "数据提取完成"

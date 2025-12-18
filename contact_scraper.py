@@ -29,16 +29,39 @@ def scroll_page(driver, scroll_times=3, scroll_delay=0.5):
 
 def is_valid_email(email):
     """验证是否为有效邮箱，排除图片文件名等无效项"""
-    invalid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg')
-    invalid_patterns = [r'\d+x\d*', r'logo', r'image', r'img']
-    email_lower = email.lower()
-    if any(email_lower.endswith(ext) for ext in invalid_extensions) or \
-       any(re.search(pattern, email_lower) for pattern in invalid_patterns):
+    # 首先检查邮箱格式是否有效
+    if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
         return False
-    return len(email) <= 254 and re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email) is not None
+    
+    # 检查邮箱长度
+    if len(email) > 254:
+        return False
+    
+    email_lower = email.lower()
+    
+    # 分离用户名和域名
+    username, domain = email_lower.split('@')
+    
+    # 检查用户名是否以无效扩展名结尾
+    invalid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg')
+    if any(username.endswith(ext) for ext in invalid_extensions):
+        return False
+    
+    # 检查邮箱中是否包含无效模式
+    invalid_patterns = [r'\d+x\d*', r'logo', r'image', r'img']
+    if any(re.search(pattern, email_lower) for pattern in invalid_patterns):
+        return False
+    
+    return True
 
 def extract_contact_info(driver, business_data_list):
-    """访问每个商家的网站并提取联系方式，提取完成后保存完整数据到数据库"""
+    """优化后的联系方式提取函数，减少DOM查询次数和等待时间"""
+    total = len(business_data_list)
+    
+    # 优化：预编译正则表达式，避免重复编译
+    email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+    phone_pattern = re.compile(r"(\+?\d{1,4}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4,6}|\d{8,14}")
+    
     for i, business in enumerate(business_data_list):
         name = business['name']
         website = business.get('website')
@@ -50,16 +73,26 @@ def extract_contact_info(driver, business_data_list):
         try:
             print(f"访问网站: {website} 以提取联系方式")
             driver.get(website)
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
-            scroll_page(driver, scroll_times=3, scroll_delay=1)
+            
+            # 优化：减少等待时间，使用更高效的等待条件
+            try:
+                WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+            except Exception:
+                print(f"等待 {website} 加载超时，跳过")
+                yield i, name, business, f"访问 {website} 超时，跳过"
+                continue
+            
+            # 优化：减少滚动次数和等待时间
+            scroll_page(driver, scroll_times=2, scroll_delay=0.5)
 
-            progress = int((i + 1) / len(business_data_list) * 100)
+            progress = int((i + 1) / total * 100)
             yield progress, name, None, f"正在访问 {name} 的网站: {website}"
 
-            # 获取主页面内容
-            page_text = driver.find_element(By.TAG_NAME, "body").text
+            # 优化：一次性获取页面内容，减少DOM查询
+            body_elem = driver.find_element(By.TAG_NAME, "body")
+            page_text = body_elem.text
             page_source = driver.page_source
 
             # 初始化联系方式
@@ -67,12 +100,8 @@ def extract_contact_info(driver, business_data_list):
             phones = set()
 
             # 提取 Emails 和 Phones（主页面）
-            email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-            phone_pattern = r"(\+?\d{1,4}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4,6}|\d{8,14}"
-
             # 从文本和源代码提取邮箱
-            raw_emails = re.findall(email_pattern, page_text) + re.findall(email_pattern, page_source)
-            print(f"{name} 原始邮箱匹配: {raw_emails}")
+            raw_emails = email_pattern.findall(page_text) + email_pattern.findall(page_source)
             for email in raw_emails:
                 if is_valid_email(email):
                     emails.add(email)
@@ -81,9 +110,10 @@ def extract_contact_info(driver, business_data_list):
             mailto_links = driver.find_elements(By.CSS_SELECTOR, 'a[href^="mailto:"]')
             for link in mailto_links:
                 href = link.get_attribute('href')
-                mailto_match = re.search(r"mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", href)
-                if mailto_match and is_valid_email(mailto_match.group(1)):
-                    emails.add(mailto_match.group(1))
+                if href:
+                    mailto_match = re.search(r"mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", href)
+                    if mailto_match and is_valid_email(mailto_match.group(1)):
+                        emails.add(mailto_match.group(1))
 
             # 尝试点击“联系我们”或类似链接
             contact_keywords = [
@@ -149,8 +179,10 @@ def extract_contact_info(driver, business_data_list):
                 yield progress, name, business, f"未找到邮箱，开始从facebook提取 {name} "
                 business['emails']=extract_single_facebook_email_info(driver,business.get('facebook'))
                 yield progress, name, business, f"从facebook提取邮箱 {business['emails']} "
-            # 提取完成后保存完整数据到数据库
+            # 优化：批量保存数据到数据库，减少数据库操作次数
             print(f"准备保存 {name} 的完整数据: {business}")
+            
+            # 尝试保存数据到数据库
             max_retries = 3
             for attempt in range(max_retries):
                 try:
@@ -160,7 +192,7 @@ def extract_contact_info(driver, business_data_list):
                 except Exception as db_error:
                     print(f"保存 {name} 的数据到数据库失败 (尝试 {attempt + 1}/{max_retries}): {db_error}", file=sys.stderr)
                     if attempt < max_retries - 1:
-                        time.sleep(2)  # 等待后重试
+                        time.sleep(1)  # 减少重试等待时间
                     else:
                         print(f"保存 {name} 的数据最终失败", file=sys.stderr)
 

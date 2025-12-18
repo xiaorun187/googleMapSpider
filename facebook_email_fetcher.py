@@ -40,6 +40,7 @@ def extract_single_facebook_email_info(driver, facebook_url):
         return emails
     except Exception as e:
         print(f"处理 Facebook URL: {facebook_url} 时发生错误: {e}", file=sys.stderr)
+        return []  # 确保始终返回列表类型
 def extract_business_info(proxy, facebook_url, business_id):
     driver, proxy_info = get_chrome_driver(proxy)
     email_address = None

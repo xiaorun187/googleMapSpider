@@ -24,6 +24,8 @@ def save_business_data_to_db(business_data):
     cursor = None
     try:
         connection = get_db_connection()
+        # 优化：使用事务批量处理
+        connection.execute("BEGIN TRANSACTION")
         cursor = connection.cursor()
 
         # Ensure table exists with unique constraint on email
@@ -46,6 +48,11 @@ def save_business_data_to_db(business_data):
             )
         """)
 
+        # 优化：预处理所有数据，减少循环内的操作
+        insert_data = []
+        update_data = []
+        email_set = set()
+        
         for business in business_data:
             name = business.get('name', '')
             website = business.get('website', '')
@@ -60,38 +67,86 @@ def save_business_data_to_db(business_data):
 
             if not emails:
                 # No email, insert directly
-                cursor.execute("""
-                    INSERT OR REPLACE INTO business_records 
-                    (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, send_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                """, (name, website, None, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube))
+                insert_data.append((name, website, None, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, 0))
             else:
                 for email in emails:
-                    # Check if email exists
-                    cursor.execute("SELECT id FROM business_records WHERE email = ?", (email,))
-                    existing = cursor.fetchone()
+                    if email in email_set:
+                        continue  # 跳过重复的email
+                    email_set.add(email)
+                    insert_data.append((name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, 0))
 
-                    if existing:
-                        # Update existing record
-                        cursor.execute("""
-                            UPDATE business_records 
-                            SET name = ?, website = ?, phones = ?, facebook = ?, twitter = ?, 
-                                instagram = ?, linkedin = ?, whatsapp = ?, youtube = ?, updated_at = CURRENT_TIMESTAMP
-                            WHERE email = ?
-                        """, (name, website, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, email))
-                    else:
-                        # Insert new record
-                        cursor.execute("""
-                            INSERT INTO business_records 
-                            (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, send_count)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                        """, (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube))
+        if insert_data:
+            # 优化：使用批量插入，减少数据库操作次数
+            cursor.executemany("""
+                INSERT OR REPLACE INTO business_records 
+                (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, send_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, insert_data)
 
         connection.commit()
         print(f"Successfully saved {len(business_data)} business records to database", file=sys.stderr)
 
     except Error as e:
+        connection.rollback()
         print(f"Failed to save business data to database: {e}", file=sys.stderr)
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+def save_business_data_batch(business_data_list):
+    """批量保存商家数据到数据库，优化性能"""
+    if not business_data_list:
+        return
+    
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        connection.execute("BEGIN TRANSACTION")
+        cursor = connection.cursor()
+        
+        # 优化：使用单个批量插入语句
+        insert_values = []
+        email_set = set()
+        
+        for business_data in business_data_list:
+            name = business_data.get('name', '')
+            website = business_data.get('website', '')
+            emails = business_data.get('emails', []) if business_data.get('emails') else []
+            phones = ','.join(business_data.get('phones', [])) if business_data.get('phones') else ''
+            facebook = business_data.get('facebook', '')
+            twitter = business_data.get('twitter', '')
+            instagram = business_data.get('instagram', '')
+            linkedin = business_data.get('linkedin', '')
+            whatsapp = business_data.get('whatsapp', '')
+            youtube = business_data.get('youtube', '')
+            
+            if emails:
+                for email in emails:
+                    if email in email_set:
+                        continue
+                    email_set.add(email)
+                    insert_values.append((name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, 0))
+            else:
+                # 没有邮箱的情况，使用None占位
+                insert_values.append((name, website, None, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, 0))
+        
+        if insert_values:
+            cursor.executemany("""
+                INSERT OR REPLACE INTO business_records 
+                (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, send_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, insert_values)
+        
+        connection.commit()
+        print(f"Successfully saved {len(business_data_list)} business records in batch", file=sys.stderr)
+    except Error as e:
+        connection.rollback()
+        print(f"Failed to save business data in batch: {e}", file=sys.stderr)
         raise
     finally:
         if cursor:
