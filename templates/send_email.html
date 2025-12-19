@@ -6,33 +6,34 @@
     <title>发送邮件 - Google Maps 商家提取</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 16px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 14px 24px; background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
-        .header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 10px; }
-        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-        .nav-links { display: flex; gap: 10px; }
-        .nav-links a { padding: 9px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 9px; font-size: 13px; font-weight: 500; transition: all 0.3s; }
-        .nav-links a:hover { transform: translateY(-2px); }
-        .main-content { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: stretch; }
-        .recipients-panel { background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .email-panel { background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .panel-header { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
-        .panel-title { font-size: 15px; font-weight: 600; color: #1a1a2e; display: flex; align-items: center; gap: 9px; }
-        .panel-title::before { content: ""; width: 4px; height: 18px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 2px; }
-        .panel-body { padding: 16px 20px; flex: 1; display: flex; flex-direction: column; }
-        .form-group { margin-bottom: 14px; }
-        .form-group label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
-        .form-group input, .form-group textarea { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 13px; transition: all 0.3s; background: #f8fafc; }
-        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #667eea; background: white; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
-        .checkbox-group { display: flex; align-items: center; gap: 9px; padding: 11px 14px; background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0; cursor: pointer; margin-bottom: 14px; }
-        .checkbox-group:hover { border-color: #667eea; }
-        .checkbox-group input { width: 16px; height: 16px; accent-color: #667eea; }
-        .checkbox-group label { font-size: 13px; color: #4a5568; cursor: pointer; }
-        .btn { padding: 12px 18px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 7px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; padding: 10px; overflow: hidden; }
+        .container { max-width: 1800px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 8px 20px; background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); flex-shrink: 0; }
+        .header h1 { font-size: 18px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 8px; }
+        .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-links a { padding: 8px 14px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 8px; font-size: 12px; font-weight: 500; }
+        .main-content { display: grid; grid-template-columns: 320px 1fr; gap: 10px; flex: 1; min-height: 0; }
+        .recipients-panel { background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 0; }
+        .email-panel { background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 0; }
+        .panel-header { padding: 10px 16px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .panel-title { font-size: 14px; font-weight: 600; color: #1a1a2e; display: flex; align-items: center; gap: 8px; }
+        .panel-title::before { content: ""; width: 3px; height: 16px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 2px; }
+        .panel-body { padding: 12px 16px; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 11px; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+        .form-group input, .form-group textarea { width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; background: #f8fafc; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #667eea; background: white; }
+        .checkbox-group { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; cursor: pointer; margin-bottom: 10px; }
+        .checkbox-group input { width: 14px; height: 14px; accent-color: #667eea; }
+        .checkbox-group label { font-size: 12px; color: #4a5568; cursor: pointer; }
+        .btn { padding: 10px 14px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
         .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; width: 100%; }
         .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; width: 100%; }
-        .btn:hover:not(:disabled) { transform: translateY(-2px); }
+        .btn-ai { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+        .btn-secondary { background: #e2e8f0; color: #4a5568; }
+        .btn-sm { padding: 6px 10px; font-size: 11px; }
+        .btn:hover:not(:disabled) { opacity: 0.9; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/7.6.0/tinymce.min.js" referrerpolicy="origin"></script>
@@ -59,15 +60,37 @@
             </div>
         </aside>
         <main class="email-panel">
-            <div class="panel-header"><h3 class="panel-title">邮件内容</h3></div>
+            <div class="panel-header">
+                <h3 class="panel-title">邮件内容</h3>
+                <button class="btn btn-secondary btn-sm" id="ai-settings-btn" onclick="openAISettings()">⚙️ AI设置</button>
+            </div>
             <div class="panel-body">
                 <div class="form-group">
                     <label>邮件主题</label>
                     <input type="text" id="subject" value="Google Maps Extraction Results">
                 </div>
-                <div class="form-group" style="flex:1;display:flex;flex-direction:column;">
+                <!-- AI 辅助按钮区域 -->
+                <div class="ai-assist-section">
+                    <div class="ai-buttons">
+                        <button class="btn btn-ai btn-sm" id="ai-generate-btn" onclick="generateEmailWithAI()">🤖 一键生成</button>
+                        <button class="btn btn-ai btn-sm" id="ai-generate-req-btn" onclick="showRequirementsInput()">📝 按要求生成</button>
+                    </div>
+                    <div class="ai-requirements" id="ai-requirements" style="display: none;">
+                        <div class="form-group">
+                            <label>输入您的要求</label>
+                            <textarea id="ai-requirements-input" rows="3" placeholder="例如：写一封介绍我们公司SEO服务的邮件，语气要专业友好..."></textarea>
+                        </div>
+                        <div class="ai-req-buttons">
+                            <button class="btn btn-ai btn-sm" onclick="generateEmailWithRequirements()">生成邮件</button>
+                            <button class="btn btn-secondary btn-sm" onclick="hideRequirementsInput()">取消</button>
+                        </div>
+                    </div>
+                    <div class="ai-status" id="ai-status"></div>
+                </div>
+                
+                <div class="form-group" style="flex:1;display:flex;flex-direction:column;min-height:0;">
                     <label>邮件正文</label>
-                    <textarea id="email-body" style="flex:1;min-height:280px;"></textarea>
+                    <textarea id="email-body" style="flex:1;min-height:200px;"></textarea>
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="attach-file" checked>
@@ -79,38 +102,87 @@
         </main>
     </div>
 </div>
+
+<!-- AI 设置弹窗 -->
+<div class="modal-overlay" id="ai-settings-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🤖 AI 配置设置</h3>
+            <button class="modal-close" onclick="closeAISettings()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>API 端点</label>
+                <input type="text" id="ai-api-endpoint" placeholder="例如: https://api.openai.com/v1/chat/completions">
+            </div>
+            <div class="form-group">
+                <label>API 密钥</label>
+                <input type="password" id="ai-api-key" placeholder="输入新密钥（留空保留原密钥）">
+                <small class="form-hint" id="api-key-hint"></small>
+            </div>
+            <div class="form-group">
+                <label>模型名称</label>
+                <input type="text" id="ai-model" placeholder="例如: gpt-3.5-turbo">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeAISettings()">取消</button>
+            <button class="btn btn-primary" onclick="saveAISettings()">保存配置</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
 
 <style>
-    .recipients-stats { display: flex; gap: 14px; margin-bottom: 14px; padding: 12px; background: linear-gradient(135deg, #f0f4ff, #f5f3ff); border-radius: 10px; }
+    .recipients-stats { display: flex; gap: 10px; margin-bottom: 10px; padding: 10px; background: linear-gradient(135deg, #f0f4ff, #f5f3ff); border-radius: 8px; flex-shrink: 0; }
     .stat-item { text-align: center; flex: 1; }
-    .stat-value { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
-    .recipients-list { flex: 1; overflow-y: auto; max-height: 280px; border: 2px solid #e2e8f0; border-radius: 10px; margin-bottom: 14px; }
-    .recipient-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s; }
+    .stat-value { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { font-size: 9px; color: #64748b; text-transform: uppercase; }
+    .recipients-list { flex: 1; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; min-height: 0; }
+    .recipient-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
     .recipient-item:last-child { border-bottom: none; }
     .recipient-item:hover { background: #f8fafc; }
-    .recipient-email { font-size: 12px; color: #334155; display: flex; align-items: center; gap: 7px; }
-    .recipient-email::before { content: "📧"; font-size: 11px; }
-    .recipient-actions { display: flex; gap: 5px; }
-    .recipient-actions button { padding: 4px 9px; border: none; border-radius: 5px; font-size: 11px; cursor: pointer; transition: all 0.2s; }
+    .recipient-email { font-size: 11px; color: #334155; display: flex; align-items: center; gap: 6px; }
+    .recipient-email::before { content: "📧"; font-size: 10px; }
+    .recipient-actions { display: flex; gap: 4px; }
+    .recipient-actions button { padding: 3px 7px; border: none; border-radius: 4px; font-size: 10px; cursor: pointer; }
     .recipient-actions .edit-btn { background: #fef3c7; color: #d97706; }
     .recipient-actions .delete-btn { background: #fee2e2; color: #dc2626; }
-    .recipient-actions button:hover { transform: scale(1.05); }
-    .empty-recipients { text-align: center; padding: 36px 16px; color: #94a3b8; }
-    .empty-recipients .empty-icon { font-size: 36px; margin-bottom: 10px; }
-    .add-email-section { margin-top: auto; padding-top: 14px; border-top: 1px solid #e2e8f0; }
-    .progress-section { margin-top: 14px; padding: 14px; background: #f8fafc; border-radius: 10px; display: none; }
+    .empty-recipients { text-align: center; padding: 24px 12px; color: #94a3b8; }
+    .empty-recipients .empty-icon { font-size: 28px; margin-bottom: 8px; }
+    .add-email-section { margin-top: auto; padding-top: 10px; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
+    .progress-section { margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; display: none; }
     .progress-section.show { display: block; }
-    .progress-bar-container { background: #e2e8f0; border-radius: 10px; height: 10px; overflow: hidden; margin-bottom: 10px; }
-    .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px; transition: width 0.4s; width: 0%; }
-    .progress-text { font-size: 12px; color: #64748b; text-align: center; }
-    .edit-input { width: 100%; padding: 5px 9px; border: 2px solid #667eea; border-radius: 5px; font-size: 12px; }
-    .spinner { width: 13px; height: 13px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; }
+    .progress-bar-container { background: #e2e8f0; border-radius: 8px; height: 8px; overflow: hidden; margin-bottom: 8px; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 8px; transition: width 0.4s; width: 0%; }
+    .progress-text { font-size: 11px; color: #64748b; text-align: center; }
+    .edit-input { width: 100%; padding: 4px 8px; border: 1px solid #667eea; border-radius: 4px; font-size: 11px; }
+    .spinner { width: 12px; height: 12px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 1000px) { .main-content { grid-template-columns: 1fr; } }
+    
+    /* AI 辅助样式 */
+    .ai-assist-section { margin-bottom: 10px; padding: 10px; background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 8px; border: 1px solid #f59e0b; flex-shrink: 0; }
+    .ai-buttons { display: flex; gap: 8px; margin-bottom: 8px; }
+    .ai-requirements { margin-top: 8px; padding-top: 8px; border-top: 1px solid #f59e0b; }
+    .ai-req-buttons { display: flex; gap: 8px; margin-top: 8px; }
+    .ai-status { font-size: 11px; color: #92400e; margin-top: 6px; }
+    .ai-status.error { color: #dc2626; }
+    .ai-status.success { color: #059669; }
+    
+    /* 弹窗样式 */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: white; border-radius: 14px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+    .modal-header h3 { font-size: 16px; font-weight: 600; color: #1a1a2e; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #94a3b8; }
+    .modal-close:hover { color: #1a1a2e; }
+    .modal-body { padding: 20px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px; border-top: 1px solid #e2e8f0; }
+    .form-hint { font-size: 11px; color: #64748b; margin-top: 4px; display: block; }
 </style>
+
 <script>
 const urlParams = new URLSearchParams(window.location.search);
 const csvFile = urlParams.get('file') || 'No file generated';
@@ -181,7 +253,7 @@ document.getElementById('add-email-btn').addEventListener('click', function() {
 
 tinymce.init({
     selector: '#email-body',
-    height: 320,
+    height: 240,
     menubar: true,
     plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table emoticons wordcount',
     toolbar: 'undo redo | styleselect | bold italic | alignleft aligncenter alignright | bullist numlist outdent indent | forecolor backcolor | link image | code',
@@ -234,4 +306,167 @@ document.getElementById('send-email').addEventListener('click', async function()
 });
 
 renderRecipients();
+
+// ============================================================================
+// AI 辅助功能
+// ============================================================================
+
+function showAIStatus(message, type = '') {
+    const status = document.getElementById('ai-status');
+    status.textContent = message;
+    status.className = 'ai-status' + (type ? ' ' + type : '');
+}
+
+function showRequirementsInput() {
+    document.getElementById('ai-requirements').style.display = 'block';
+}
+
+function hideRequirementsInput() {
+    document.getElementById('ai-requirements').style.display = 'none';
+    document.getElementById('ai-requirements-input').value = '';
+}
+
+async function generateEmailWithAI() {
+    const btn = document.getElementById('ai-generate-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 生成中...';
+    showAIStatus('正在调用AI生成邮件内容...');
+    
+    try {
+        const res = await fetch('/api/ai/generate-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: {} })
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success' && data.content) {
+            // 将生成的内容设置到编辑器
+            const editor = tinymce.get('email-body');
+            if (editor) {
+                editor.setContent(data.content.replace(/\n/g, '<br>'));
+            }
+            showAIStatus('邮件内容生成成功！您可以继续编辑。', 'success');
+        } else {
+            showAIStatus(data.message || '生成失败，请检查AI配置', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showAIStatus('请求失败，请稍后重试', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🤖 一键生成';
+    }
+}
+
+async function generateEmailWithRequirements() {
+    const requirements = document.getElementById('ai-requirements-input').value.trim();
+    if (!requirements) {
+        alert('请输入您的要求');
+        return;
+    }
+    
+    const btn = document.querySelector('#ai-requirements button.btn-ai');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 生成中...';
+    showAIStatus('正在根据您的要求生成邮件...');
+    
+    try {
+        const res = await fetch('/api/ai/generate-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requirements, context: {} })
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success' && data.content) {
+            const editor = tinymce.get('email-body');
+            if (editor) {
+                editor.setContent(data.content.replace(/\n/g, '<br>'));
+            }
+            showAIStatus('邮件内容生成成功！您可以继续编辑。', 'success');
+            hideRequirementsInput();
+        } else {
+            showAIStatus(data.message || '生成失败，请检查AI配置', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showAIStatus('请求失败，请稍后重试', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '生成邮件';
+    }
+}
+
+// ============================================================================
+// AI 设置功能
+// ============================================================================
+
+async function openAISettings() {
+    document.getElementById('ai-settings-modal').style.display = 'flex';
+    
+    // 加载现有配置
+    try {
+        const res = await fetch('/api/ai-config');
+        const data = await res.json();
+        
+        if (data.status === 'success' && data.config) {
+            document.getElementById('ai-api-endpoint').value = data.config.api_endpoint || '';
+            document.getElementById('ai-model').value = data.config.model || '';
+            document.getElementById('api-key-hint').textContent = data.config.has_api_key ? '已配置密钥（留空保留原密钥）' : '未配置密钥';
+        }
+    } catch (e) {
+        console.error('加载AI配置失败:', e);
+    }
+}
+
+function closeAISettings() {
+    document.getElementById('ai-settings-modal').style.display = 'none';
+    document.getElementById('ai-api-key').value = '';
+}
+
+async function saveAISettings() {
+    const endpoint = document.getElementById('ai-api-endpoint').value.trim();
+    const apiKey = document.getElementById('ai-api-key').value.trim();
+    const model = document.getElementById('ai-model').value.trim();
+    
+    if (!endpoint) {
+        alert('请输入API端点');
+        return;
+    }
+    if (!model) {
+        alert('请输入模型名称');
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/ai-config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_endpoint: endpoint,
+                api_key: apiKey,
+                model: model
+            })
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+            alert('AI配置保存成功！');
+            closeAISettings();
+        } else {
+            alert(data.message || '保存失败');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('保存失败，请稍后重试');
+    }
+}
+
+// 点击弹窗外部关闭
+document.getElementById('ai-settings-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeAISettings();
+    }
+});
 </script>

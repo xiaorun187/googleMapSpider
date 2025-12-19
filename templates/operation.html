@@ -6,19 +6,18 @@
     <title>Google Maps 商家数据提取</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 16px; }
-        .container { max-width: 1800px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 14px 24px; background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
-        .header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 10px; }
-        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-        .nav-links { display: flex; gap: 10px; }
-        .nav-links a { padding: 9px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 9px; font-size: 13px; font-weight: 500; transition: all 0.3s; }
-        .nav-links a:hover { transform: translateY(-2px); }
-        .main-content { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: stretch; }
-        .control-panel { background: rgba(255,255,255,0.98); border-radius: 14px; padding: 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
-        .data-panel { background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .panel-title { font-size: 15px; font-weight: 600; color: #1a1a2e; margin-bottom: 18px; display: flex; align-items: center; gap: 9px; }
-        .panel-title::before { content: ""; width: 4px; height: 18px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 2px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; padding: 10px; overflow: hidden; }
+        .container { max-width: 1800px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px; background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); margin-bottom: 10px; flex-shrink: 0; }
+        .header h1 { font-size: 18px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 8px; }
+        .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-links a { padding: 8px 14px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 8px; font-size: 12px; font-weight: 500; }
+        .main-content { display: grid; grid-template-columns: 300px 1fr; gap: 10px; flex: 1; min-height: 0; }
+        .control-panel { background: rgba(255,255,255,0.98); border-radius: 10px; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); overflow-y: auto; }
+        .data-panel { background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 0; }
+        .panel-title { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .panel-title::before { content: ""; width: 3px; height: 16px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 2px; }
     </style>
     <script src="{{ url_for('static', filename='js/socket.io.js') }}"></script>
 </head>
@@ -26,8 +25,9 @@
 <div class="container">
     <header class="header">
         <h1><span class="logo-icon">🗺️</span>Google Maps 商家数据提取</h1>
-        <nav class="nav-links"><a href="/history">📋 历史记录</a><a href="/send_email_page">✉️ 发送邮件</a></nav>
+        <nav class="nav-links"><a href="/history">📋 历史</a><a href="/send_email_page">✉️ 邮件</a></nav>
     </header>
+
     <div class="main-content">
         <aside class="control-panel" id="control-panel"></aside>
         <main class="data-panel" id="data-panel"></main>
@@ -35,103 +35,119 @@
 </div>
 </body>
 </html>
+
 <style>
-    .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
-    .form-group input[type="text"], .form-group input[type="number"] { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 13px; transition: all 0.3s; background: #f8fafc; }
-    .form-group input:focus { outline: none; border-color: #667eea; background: white; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
-    .checkbox-group { display: flex; align-items: center; gap: 9px; padding: 11px 14px; background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0; cursor: pointer; }
-    .checkbox-group:hover { border-color: #667eea; }
-    .checkbox-group input { width: 16px; height: 16px; accent-color: #667eea; }
-    .checkbox-group label { font-size: 13px; }
-    .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 7px; }
+    .form-group { margin-bottom: 10px; }
+    .form-group label { display: block; font-size: 11px; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+    .form-group input[type="text"], .form-group input[type="number"] { width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; background: #f8fafc; }
+    .form-group input:focus { outline: none; border-color: #667eea; background: white; }
+    .form-select { width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; background: #f8fafc; cursor: pointer; }
+    .form-select:focus { outline: none; border-color: #667eea; }
+    .form-select:disabled { background-color: #f1f5f9; cursor: not-allowed; opacity: 0.7; }
+    .checkbox-group { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .checkbox-group input { width: 14px; height: 14px; accent-color: #667eea; }
+    .checkbox-group label { font-size: 12px; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; }
     .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
     .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; }
     .btn-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-    .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .btn:hover:not(:disabled) { opacity: 0.9; }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .progress-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid #f1f5f9; }
-    .progress-label { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 8px; text-transform: uppercase; }
-    .progress-bar-container { background: #e2e8f0; border-radius: 10px; height: 10px; overflow: hidden; margin-bottom: 10px; }
-    .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px; transition: width 0.4s; }
-    .progress-text { font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 7px; }
-    .spinner { width: 13px; height: 13px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; }
+    .progress-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
+    .progress-label { font-size: 10px; font-weight: 600; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
+    .progress-bar-container { background: #e2e8f0; border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 6px; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 6px; transition: width 0.3s; }
+    .progress-text { font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 6px; }
+    .spinner { width: 12px; height: 12px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .data-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-bottom: 1px solid #e2e8f0; border-radius: 14px 14px 0 0; }
-    .data-header h2 { font-size: 14px; font-weight: 600; color: #1a1a2e; }
-    .data-stats { display: flex; gap: 18px; }
+    .data-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-radius: 10px 10px 0 0; flex-shrink: 0; }
+    .data-header h2 { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+    .data-stats { display: flex; gap: 14px; }
     .stat-item { text-align: center; }
-    .stat-value { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .stat-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
-    .toolbar { display: flex; gap: 10px; padding: 10px 18px; background: #fafbfc; border-bottom: 1px solid #e2e8f0; }
+    .stat-value { font-size: 15px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { font-size: 9px; color: #94a3b8; text-transform: uppercase; }
+    .toolbar { display: flex; gap: 8px; padding: 6px 14px; background: #fafbfc; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
     .search-box { flex: 1; position: relative; }
-    .search-box input { width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
-    .search-box input:focus { outline: none; border-color: #667eea; }
-    .search-box::before { content: "🔍"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; }
-    .view-toggle { display: flex; background: #e2e8f0; border-radius: 6px; padding: 3px; }
-    .view-toggle button { padding: 5px 12px; border: none; background: transparent; border-radius: 4px; cursor: pointer; font-size: 12px; }
-    .view-toggle button.active { background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-    .data-list { padding: 14px 18px; flex: 1; display: flex; flex-direction: column; }
-    .business-card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; transition: all 0.2s; position: relative; }
-    .business-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, #667eea, #764ba2); opacity: 0; transition: opacity 0.2s; border-radius: 10px 0 0 10px; }
-    .business-card:hover { border-color: #667eea; box-shadow: 0 3px 10px rgba(102,126,234,0.12); }
-    .business-card:hover::before { opacity: 1; }
-    .business-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .business-name { font-size: 14px; font-weight: 600; color: #1a1a2e; }
-    .business-index { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-    .business-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .info-item { display: flex; align-items: flex-start; gap: 8px; }
-    .info-icon { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: #f0f4ff; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
+    .search-box input { width: 100%; padding: 5px 10px 5px 28px; border: 1px solid #e2e8f0; border-radius: 5px; font-size: 12px; }
+    .search-box::before { content: "🔍"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; }
+    .view-toggle { display: flex; background: #e2e8f0; border-radius: 5px; padding: 2px; }
+    .view-toggle button { padding: 3px 10px; border: none; background: transparent; border-radius: 3px; cursor: pointer; font-size: 11px; }
+    .view-toggle button.active { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .data-list { padding: 12px; flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(5, 1fr); gap: 10px; overflow: auto; }
+    .data-list.data-list-table { display: block; padding: 0; }
+    .business-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; min-height: 0; overflow: hidden; }
+    .business-card:hover { border-color: #667eea; box-shadow: 0 2px 6px rgba(102,126,234,0.12); }
+    .business-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
+    .business-name { font-size: 13px; font-weight: 600; color: #1a1a2e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .business-index { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-left: 8px; flex-shrink: 0; }
+    .business-info { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; align-content: center; }
+</style>
+
+<style>
+    .info-item { display: flex; align-items: center; gap: 6px; }
+    .info-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: #f0f4ff; border-radius: 4px; font-size: 11px; flex-shrink: 0; }
     .info-content { flex: 1; min-width: 0; }
-    .info-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; }
-    .info-value { font-size: 12px; color: #334155; word-break: break-all; line-height: 1.4; }
+    .info-label { display: none; }
+    .info-value { font-size: 12px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .info-value a { color: #667eea; text-decoration: none; }
-    .info-value a:hover { text-decoration: underline; }
     .info-value.empty { color: #cbd5e1; font-style: italic; }
-    .social-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
-    .social-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 12px; font-size: 11px; font-weight: 500; text-decoration: none; transition: all 0.2s; }
+    .social-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; flex-shrink: 0; }
+    .social-tag { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 8px; font-size: 9px; font-weight: 500; text-decoration: none; }
     .social-tag.facebook { background: #e7f3ff; color: #1877f2; }
     .social-tag.twitter { background: #e8f5fd; color: #1da1f2; }
     .social-tag.instagram { background: #fce4ec; color: #e4405f; }
     .social-tag.linkedin { background: #e8f4f8; color: #0077b5; }
     .social-tag.youtube { background: #ffebee; color: #ff0000; }
     .social-tag.whatsapp { background: #e8f5e9; color: #25d366; }
-    .social-tag:hover { transform: scale(1.05); }
     .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .data-table th { background: #f8fafc; padding: 12px 14px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 2px solid #e2e8f0; }
-    .data-table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; color: #334155; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-table th { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 12px 16px; text-align: left; font-weight: 600; position: sticky; top: 0; z-index: 1; }
+    .data-table td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: #334155; }
     .data-table tr:hover td { background: #f8fafc; }
     .data-table a { color: #667eea; }
-    .pagination { display: flex; justify-content: center; align-items: center; gap: 4px; padding: 10px 18px; border-top: 1px solid #e2e8f0; }
-    .pagination button { padding: 5px 11px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s; }
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 3px; padding: 6px 14px; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
+    .pagination button { padding: 3px 8px; border: 1px solid #e2e8f0; background: white; border-radius: 4px; cursor: pointer; font-size: 11px; }
     .pagination button:hover:not(:disabled) { border-color: #667eea; color: #667eea; }
     .pagination button.active { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-color: transparent; }
     .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .page-info { font-size: 12px; color: #64748b; margin: 0 8px; }
-    .download-section { padding: 10px 18px; background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border-top: 1px solid #d1fae5; display: none; justify-content: space-between; align-items: center; border-radius: 0 0 14px 14px; }
+    .page-info { font-size: 11px; color: #64748b; margin: 0 6px; }
+    .download-section { padding: 6px 14px; background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border-top: 1px solid #d1fae5; display: none; justify-content: space-between; align-items: center; border-radius: 0 0 10px 10px; flex-shrink: 0; }
     .download-section.show { display: flex; }
-    .download-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 12px; }
-    .download-btn:hover { transform: translateY(-2px); }
-    .empty-state { text-align: center; padding: 36px 20px; color: #94a3b8; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .download-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 5px; font-weight: 600; font-size: 11px; }
+    .empty-state { text-align: center; padding: 30px 16px; color: #94a3b8; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    .empty-icon { font-size: 32px; margin-bottom: 8px; }
     @media (max-width: 1200px) { .main-content { grid-template-columns: 1fr; } .business-info { grid-template-columns: 1fr 1fr; } }
+    
+
 </style>
+
 <script>
 document.getElementById('control-panel').innerHTML = `
     <h3 class="panel-title">提取设置</h3>
     <form id="extraction-form">
-        <div class="form-group"><label>🏙️ 城市名称</label><input type="text" id="city" name="city" placeholder="例如: Atlanta, New York, Los Angeles..." required></div>
-        <div class="form-group"><label>🛍️ 商品/服务名称</label><input type="text" id="product" name="product" placeholder="例如: sofa, restaurant, hotel..." required></div>
+        <div class="form-group">
+            <label>🌍 国家</label>
+            <select id="country" name="country" class="form-select"><option value="">-- 选择国家 --</option></select>
+        </div>
+        <div class="form-group">
+            <label>🏙️ 城市 <span style="font-weight:normal;color:#94a3b8;font-size:10px;">(可选)</span></label>
+            <select id="city-select" name="city-select" class="form-select" disabled><option value="">-- 先选择国家 --</option></select>
+            <input type="text" id="city" name="city" placeholder="或手动输入城市..." style="margin-top: 4px;">
+            <div id="country-scrape-hint" style="display:none;margin-top:4px;padding:6px 8px;background:#fef3c7;border-radius:4px;font-size:11px;color:#92400e;">
+                💡 未选择城市，将按顺序爬取整个国家的所有城市
+            </div>
+        </div>
+        <div class="form-group"><label>🛍️ 商品/服务</label><input type="text" id="product" name="product" placeholder="例如: sofa, restaurant..." required></div>
         <input type="hidden" id="url" name="url">
-        <div class="form-group"><label>提取数量</label><input type="number" id="limit" name="limit" value="10" min="1" max="500"></div>
-        <div class="form-group"><label>代理服务器 (可选)</label><input type="text" id="proxy" name="proxy" placeholder="user:pass@host:port"></div>
-        <div class="form-group"><div class="checkbox-group"><input type="checkbox" id="remember_position"><label for="remember_position">记住上次提取位置</label></div></div>
+        <div class="form-group"><label>数量 <span style="font-weight:normal;color:#94a3b8;font-size:10px;">(留空=不限制)</span></label><input type="number" id="limit" name="limit" placeholder="留空不限制" min="1"></div>
+        <div class="form-group"><label>代理 (可选)</label><input type="text" id="proxy" name="proxy" placeholder="user:pass@host:port"></div>
+        <div class="form-group"><div class="checkbox-group"><input type="checkbox" id="remember_position"><label for="remember_position">记住位置</label></div></div>
         <button type="submit" class="btn btn-primary" id="start-btn">🚀 开始提取</button>
+        <button type="button" class="btn" id="stop-btn" style="display:none; background: linear-gradient(135deg, #ef4444, #dc2626); color: white;">⏹️ 停止提取</button>
         <button type="button" class="btn btn-success" id="extract-contacts-btn" style="display:none;">📧 提取联系方式</button>
-        <button type="button" class="btn btn-warning" id="send-email-btn">✉️ 批量发送邮件</button>
+        <button type="button" class="btn btn-warning" id="send-email-btn">✉️ 批量发邮件</button>
     </form>
     <div class="progress-section">
-        <div class="progress-label">任务进度</div>
+        <div class="progress-label">进度</div>
         <div class="progress-bar-container"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
         <p class="progress-text" id="progress-text">等待开始...</p>
     </div>
@@ -142,24 +158,129 @@ document.getElementById('data-panel').innerHTML = `
         <h2>📊 提取结果</h2>
         <div class="data-stats">
             <div class="stat-item"><div class="stat-value" id="total-count">0</div><div class="stat-label">总数</div></div>
-            <div class="stat-item"><div class="stat-value" id="email-count">0</div><div class="stat-label">有邮箱</div></div>
-            <div class="stat-item"><div class="stat-value" id="website-count">0</div><div class="stat-label">有网站</div></div>
+            <div class="stat-item"><div class="stat-value" id="email-count">0</div><div class="stat-label">邮箱</div></div>
+            <div class="stat-item"><div class="stat-value" id="website-count">0</div><div class="stat-label">网站</div></div>
         </div>
     </div>
     <div class="toolbar">
-        <div class="search-box"><input type="text" id="search-input" placeholder="搜索商家名称、网站、邮箱..."></div>
+        <div class="search-box"><input type="text" id="search-input" placeholder="搜索..."></div>
         <div class="view-toggle"><button class="active" data-view="card">卡片</button><button data-view="table">表格</button></div>
     </div>
     <div class="data-list" id="data-list"></div>
     <div class="pagination" id="pagination"></div>
     <div class="download-section" id="download-section">
-        <span>✅ 数据提取完成</span>
-        <a href="#" class="download-btn" id="download-btn">📥 下载 Excel</a>
+        <span>✅ 完成</span>
+        <a href="#" class="download-btn" id="download-btn">📥 下载</a>
     </div>
 `;
+</script>
 
+<script>
 const socket = io();
 let businessData = [], currentView = 'card', searchQuery = '', currentPage = 1, pageSize = 10;
+let countryCityData = {};
+
+// 数据持久化功能
+const STORAGE_KEY = 'gmaps_business_data';
+const DOWNLOAD_KEY = 'gmaps_download_file';
+
+function saveDataToStorage() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(businessData));
+    } catch (e) { console.warn('保存数据失败:', e); }
+}
+
+function loadDataFromStorage() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            businessData = JSON.parse(saved);
+            renderData();
+            // 恢复下载按钮
+            const downloadFile = localStorage.getItem(DOWNLOAD_KEY);
+            if (downloadFile && businessData.length > 0) {
+                document.getElementById('download-btn').href = `/download/${downloadFile}`;
+                document.getElementById('download-section').classList.add('show');
+                document.getElementById('extract-contacts-btn').style.display = 'block';
+            }
+        }
+    } catch (e) { console.warn('加载数据失败:', e); }
+}
+
+function clearStoredData() {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(DOWNLOAD_KEY);
+}
+
+async function loadCountryCityData() {
+    try {
+        const response = await fetch('/api/countries');
+        if (response.ok) { countryCityData = await response.json(); populateCountrySelect(); }
+        else { loadLocalCountryCityData(); }
+    } catch (e) { loadLocalCountryCityData(); }
+}
+
+function loadLocalCountryCityData() {
+    countryCityData = {
+        "US": { "name": "United States", "cities": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Seattle", "Denver", "Boston", "Atlanta", "Miami"] },
+        "GB": { "name": "United Kingdom", "cities": ["London", "Birmingham", "Manchester", "Glasgow", "Liverpool", "Leeds"] },
+        "CA": { "name": "Canada", "cities": ["Toronto", "Montreal", "Vancouver", "Calgary", "Edmonton", "Ottawa"] },
+        "AU": { "name": "Australia", "cities": ["Sydney", "Melbourne", "Brisbane", "Perth", "Adelaide"] },
+        "DE": { "name": "Germany", "cities": ["Berlin", "Hamburg", "Munich", "Cologne", "Frankfurt"] },
+        "FR": { "name": "France", "cities": ["Paris", "Marseille", "Lyon", "Toulouse", "Nice"] },
+        "CN": { "name": "China", "cities": ["Shanghai", "Beijing", "Guangzhou", "Shenzhen", "Chengdu", "Hangzhou"] },
+        "JP": { "name": "Japan", "cities": ["Tokyo", "Osaka", "Nagoya", "Sapporo", "Fukuoka", "Kyoto"] }
+    };
+    populateCountrySelect();
+}
+
+function populateCountrySelect() {
+    const sel = document.getElementById('country');
+    sel.innerHTML = '<option value="">-- 选择国家 --</option>';
+    Object.keys(countryCityData).sort((a, b) => countryCityData[a].name.localeCompare(countryCityData[b].name)).forEach(code => {
+        sel.innerHTML += `<option value="${code}">${countryCityData[code].name}</option>`;
+    });
+}
+
+function populateCitySelect(code) {
+    const sel = document.getElementById('city-select');
+    if (!code || !countryCityData[code]) { sel.innerHTML = '<option value="">-- 先选择国家 --</option>'; sel.disabled = true; return; }
+    sel.innerHTML = '<option value="">-- 选择城市 --</option>';
+    (countryCityData[code].cities || []).forEach(c => { sel.innerHTML += `<option value="${c}">${c}</option>`; });
+    sel.disabled = false;
+}
+
+document.getElementById('country').addEventListener('change', function() { 
+    populateCitySelect(this.value); 
+    document.getElementById('city').value = ''; 
+    updateCountryScrapeHint();
+});
+document.getElementById('city-select').addEventListener('change', function() { 
+    document.getElementById('city').value = this.value; 
+    updateCountryScrapeHint();
+});
+document.getElementById('city').addEventListener('input', function() {
+    updateCountryScrapeHint();
+});
+
+function updateCountryScrapeHint() {
+    const country = document.getElementById('country').value;
+    const city = document.getElementById('city').value.trim();
+    const citySelect = document.getElementById('city-select').value;
+    const hint = document.getElementById('country-scrape-hint');
+    
+    // 如果选了国家但没有城市，显示提示
+    if (country && !city && !citySelect) {
+        const countryName = countryCityData[country]?.name || country;
+        const cityCount = countryCityData[country]?.cities?.length || 0;
+        hint.innerHTML = `💡 未选择城市，将按顺序爬取 <strong>${countryName}</strong> 的 ${cityCount} 个城市`;
+        hint.style.display = 'block';
+    } else {
+        hint.style.display = 'none';
+    }
+}
+
+loadCountryCityData();
 
 function updateStats() {
     document.getElementById('total-count').textContent = businessData.length;
@@ -170,18 +291,20 @@ function updateStats() {
 function formatValue(v) {
     if (!v || (Array.isArray(v) && !v.length)) return '<span class="empty">-</span>';
     if (Array.isArray(v)) return v.map(x => x && x.includes && x.includes('http') ? `<a href="${x}" target="_blank">${x}</a>` : x).join(', ');
-    if (v.includes && v.includes('http')) { const s = v.length > 35 ? v.slice(0,35)+'...' : v; return `<a href="${v}" target="_blank" title="${v}">${s}</a>`; }
+    if (v.includes && v.includes('http')) { const s = v.length > 30 ? v.slice(0,30)+'...' : v; return `<a href="${v}" target="_blank" title="${v}">${s}</a>`; }
     return v;
 }
+</script>
 
+<script>
 function renderCard(b, i) {
     const tags = [];
-    if (b.facebook) tags.push(`<a href="${b.facebook}" target="_blank" class="social-tag facebook">📘 Facebook</a>`);
-    if (b.twitter) tags.push(`<a href="${b.twitter}" target="_blank" class="social-tag twitter">🐦 Twitter</a>`);
-    if (b.instagram) tags.push(`<a href="${b.instagram}" target="_blank" class="social-tag instagram">📷 Instagram</a>`);
-    if (b.linkedin) tags.push(`<a href="${b.linkedin}" target="_blank" class="social-tag linkedin">💼 LinkedIn</a>`);
-    if (b.youtube) tags.push(`<a href="${b.youtube}" target="_blank" class="social-tag youtube">▶️ YouTube</a>`);
-    if (b.whatsapp) tags.push(`<a href="${b.whatsapp}" target="_blank" class="social-tag whatsapp">💬 WhatsApp</a>`);
+    if (b.facebook) tags.push(`<a href="${b.facebook}" target="_blank" class="social-tag facebook">FB</a>`);
+    if (b.twitter) tags.push(`<a href="${b.twitter}" target="_blank" class="social-tag twitter">TW</a>`);
+    if (b.instagram) tags.push(`<a href="${b.instagram}" target="_blank" class="social-tag instagram">IG</a>`);
+    if (b.linkedin) tags.push(`<a href="${b.linkedin}" target="_blank" class="social-tag linkedin">LI</a>`);
+    if (b.youtube) tags.push(`<a href="${b.youtube}" target="_blank" class="social-tag youtube">YT</a>`);
+    if (b.whatsapp) tags.push(`<a href="${b.whatsapp}" target="_blank" class="social-tag whatsapp">WA</a>`);
     return `<div class="business-card"><div class="business-card-header"><span class="business-name">${b.name||'Unknown'}</span><span class="business-index">#${i+1}</span></div>
         <div class="business-info">
             <div class="info-item"><span class="info-icon">🌐</span><div class="info-content"><div class="info-label">网站</div><div class="info-value">${formatValue(b.website)}</div></div></div>
@@ -191,22 +314,21 @@ function renderCard(b, i) {
 }
 
 function renderTable(data, startIdx) {
-    return `<table class="data-table"><thead><tr><th>#</th><th>名称</th><th>网站</th><th>邮箱</th><th>电话</th><th>社交</th></tr></thead>
-        <tbody>${data.map((b,i) => `<tr><td>${startIdx+i+1}</td><td>${b.name||'-'}</td><td>${formatValue(b.website)}</td><td>${formatValue(b.emails)}</td><td>${formatValue(b.phones)}</td>
-        <td>${[b.facebook&&'FB',b.instagram&&'IG',b.twitter&&'TW',b.linkedin&&'LI'].filter(Boolean).join(', ')||'-'}</td></tr>`).join('')}</tbody></table>`;
+    return `<table class="data-table"><thead><tr><th>#</th><th>名称</th><th>网站</th><th>邮箱</th><th>电话</th></tr></thead>
+        <tbody>${data.map((b,i) => `<tr><td>${startIdx+i+1}</td><td>${b.name||'-'}</td><td>${formatValue(b.website)}</td><td>${formatValue(b.emails)}</td><td>${formatValue(b.phones)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderPagination(total) {
     const pages = Math.ceil(total / pageSize);
     const pag = document.getElementById('pagination');
     if (pages <= 1) { pag.innerHTML = ''; return; }
-    let html = `<button ${currentPage===1?'disabled':''} onclick="goPage(1)">首页</button>
+    let html = `<button ${currentPage===1?'disabled':''} onclick="goPage(1)">首</button>
         <button ${currentPage===1?'disabled':''} onclick="goPage(${currentPage-1})">‹</button>`;
     for (let i = Math.max(1, currentPage - 2); i <= Math.min(pages, currentPage + 2); i++) 
         html += `<button class="${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
-    html += `<span class="page-info">${currentPage} / ${pages}</span>
+    html += `<span class="page-info">${currentPage}/${pages}</span>
         <button ${currentPage===pages?'disabled':''} onclick="goPage(${currentPage+1})">›</button>
-        <button ${currentPage===pages?'disabled':''} onclick="goPage(${pages})">末页</button>`;
+        <button ${currentPage===pages?'disabled':''} onclick="goPage(${pages})">末</button>`;
     pag.innerHTML = html;
 }
 
@@ -220,38 +342,93 @@ function renderData() {
     }
     const list = document.getElementById('data-list');
     if (!filtered.length) {
-        list.innerHTML = `<div class="empty-state"><div class="empty-icon">${searchQuery?'🔍':'📭'}</div><div>${searchQuery?'未找到匹配结果':'暂无数据，请输入城市和商品名称开始提取'}</div></div>`;
+        list.className = 'data-list';
+        list.innerHTML = `<div class="empty-state"><div class="empty-icon">${searchQuery?'🔍':'📭'}</div><div>${searchQuery?'未找到':'暂无数据'}</div></div>`;
         document.getElementById('pagination').innerHTML = '';
     } else {
         const start = (currentPage - 1) * pageSize, pageData = filtered.slice(start, start + pageSize);
-        list.innerHTML = currentView === 'card' ? pageData.map((b, i) => renderCard(b, start + i)).join('') : renderTable(pageData, start);
+        if (currentView === 'card') {
+            list.className = 'data-list';
+            list.innerHTML = pageData.map((b, i) => renderCard(b, start + i)).join('');
+        } else {
+            list.className = 'data-list data-list-table';
+            list.innerHTML = renderTable(pageData, start);
+        }
         renderPagination(filtered.length);
     }
     updateStats();
 }
+</script>
+
+<script>
+let isExtracting = false;
 
 document.getElementById('extraction-form').addEventListener('submit', function(e) {
     e.preventDefault();
+    const country = document.getElementById('country').value;
     const city = document.getElementById('city').value.trim();
     const product = document.getElementById('product').value.trim();
-    if (!city || !product) { alert('请输入城市名称和商品名称'); return; }
     
-    businessData = []; currentPage = 1; renderData();
+    // 商品必填，城市可选（如果选了国家但没选城市，则爬取整个国家）
+    if (!product) { alert('请输入商品/服务名称'); return; }
+    if (!city && !country) { alert('请选择国家或输入城市名称'); return; }
+    
+    businessData = []; currentPage = 1; clearStoredData(); renderData();
     document.getElementById('download-section').classList.remove('show');
     document.getElementById('extract-contacts-btn').style.display = 'none';
     document.getElementById('start-btn').disabled = true;
-    document.getElementById('start-btn').innerHTML = '<span class="spinner"></span> 提取中...';
+    document.getElementById('start-btn').style.display = 'none';
+    document.getElementById('stop-btn').style.display = 'flex';
+    isExtracting = true;
     document.getElementById('progress-bar').style.width = '0%';
-    document.getElementById('progress-text').innerHTML = `<span class="spinner"></span> 正在定位城市: ${city}，搜索: ${product}...`;
+    
+    // 如果没有城市但有国家，显示将爬取整个国家
+    const statusMsg = city ? `定位: ${city}...` : `准备爬取 ${countryCityData[country]?.name || country} 的所有城市...`;
+    document.getElementById('progress-text').innerHTML = `<span class="spinner"></span> ${statusMsg}`;
+    
     fetch('/start_extraction', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `city=${encodeURIComponent(city)}&product=${encodeURIComponent(product)}&limit=${document.getElementById('limit').value}&proxy=${encodeURIComponent(document.getElementById('proxy').value)}&remember_position=${document.getElementById('remember_position').checked?'on':'off'}`
-    }).then(r => r.json()).then(d => { if (d.status !== 'success') { document.getElementById('progress-text').textContent = '错误: ' + d.message; document.getElementById('start-btn').disabled = false; document.getElementById('start-btn').textContent = '🚀 开始提取'; }});
+        body: `country=${encodeURIComponent(country)}&city=${encodeURIComponent(city)}&product=${encodeURIComponent(product)}&limit=${document.getElementById('limit').value}&proxy=${encodeURIComponent(document.getElementById('proxy').value)}&remember_position=${document.getElementById('remember_position').checked?'on':'off'}`
+    }).then(r => r.json()).then(d => { 
+        if (d.status !== 'success') { 
+            document.getElementById('progress-text').textContent = '错误: ' + d.message; 
+            resetExtractionUI();
+        }
+    });
 });
+
+document.getElementById('stop-btn').addEventListener('click', function() {
+    if (!isExtracting) return;
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner"></span> 停止中...';
+    document.getElementById('progress-text').innerHTML = '<span class="spinner"></span> 正在停止...';
+    fetch('/stop_extraction', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.status === 'success') {
+                document.getElementById('progress-text').textContent = d.message;
+            } else {
+                document.getElementById('progress-text').textContent = '停止失败: ' + d.message;
+            }
+        })
+        .catch(e => {
+            document.getElementById('progress-text').textContent = '停止请求失败';
+        });
+});
+
+function resetExtractionUI() {
+    isExtracting = false;
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('start-btn').style.display = 'flex';
+    document.getElementById('start-btn').innerHTML = '🚀 开始提取';
+    document.getElementById('stop-btn').style.display = 'none';
+    document.getElementById('stop-btn').disabled = false;
+    document.getElementById('stop-btn').innerHTML = '⏹️ 停止提取';
+}
 
 document.getElementById('extract-contacts-btn').addEventListener('click', function() {
     this.disabled = true; this.innerHTML = '<span class="spinner"></span> 提取中...';
     document.getElementById('progress-bar').style.width = '0%';
-    document.getElementById('progress-text').innerHTML = '<span class="spinner"></span> 正在提取联系方式...';
+    document.getElementById('progress-text').innerHTML = '<span class="spinner"></span> 提取联系方式...';
     fetch('/extract_contacts', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `proxy=${encodeURIComponent(document.getElementById('proxy').value)}` });
 });
 
@@ -262,25 +439,57 @@ document.getElementById('send-email-btn').addEventListener('click', function() {
 socket.on('progress_update', function(d) {
     document.getElementById('progress-bar').style.width = d.progress + '%';
     document.getElementById('progress-text').innerHTML = d.progress < 100 ? `<span class="spinner"></span> ${d.message}` : d.message;
-    if (d.business_data) { businessData.push(d.business_data); renderData(); }
-    if (d.progress === 100) {
-        if (d.data) { businessData = d.data; currentPage = 1; renderData(); }
-        if (d.csv_file) { document.getElementById('download-btn').href = `/download/${d.csv_file}`; document.getElementById('download-btn').textContent = `📥 下载 ${d.csv_file}`; document.getElementById('download-section').classList.add('show'); }
-        document.getElementById('extract-contacts-btn').style.display = 'block'; document.getElementById('extract-contacts-btn').disabled = false; document.getElementById('extract-contacts-btn').innerHTML = '📧 提取联系方式';
-        document.getElementById('start-btn').disabled = false; document.getElementById('start-btn').innerHTML = '🚀 开始提取';
+    if (d.business_data) { businessData.push(d.business_data); saveDataToStorage(); renderData(); }
+    if (d.progress === 100 || d.stopping) {
+        if (d.data) { businessData = d.data; currentPage = 1; saveDataToStorage(); renderData(); }
+        if (d.csv_file) { 
+            document.getElementById('download-btn').href = `/download/${d.csv_file}`; 
+            document.getElementById('download-section').classList.add('show');
+            localStorage.setItem(DOWNLOAD_KEY, d.csv_file);
+        }
+        document.getElementById('extract-contacts-btn').style.display = 'block'; 
+        document.getElementById('extract-contacts-btn').disabled = false; 
+        document.getElementById('extract-contacts-btn').innerHTML = '📧 提取联系方式';
+        resetExtractionUI();
     }
 });
 
 socket.on('contact_update', function(d) {
     document.getElementById('progress-bar').style.width = d.progress + '%';
     document.getElementById('progress-text').innerHTML = d.progress < 100 ? `<span class="spinner"></span> ${d.message}` : d.message;
-    if (d.business_data) { const idx = businessData.findIndex(b => b.name === d.business_data.name); if (idx !== -1) { businessData[idx] = d.business_data; renderData(); }}
+    if (d.business_data) { const idx = businessData.findIndex(b => b.name === d.business_data.name); if (idx !== -1) { businessData[idx] = d.business_data; saveDataToStorage(); renderData(); }}
     if (d.progress === 100) {
-        if (d.data) { businessData = d.data; currentPage = 1; renderData(); }
-        if (d.csv_file) { document.getElementById('download-btn').href = `/download/${d.csv_file}`; document.getElementById('download-section').classList.add('show'); }
+        if (d.data) { businessData = d.data; currentPage = 1; saveDataToStorage(); renderData(); }
+        if (d.csv_file) { 
+            document.getElementById('download-btn').href = `/download/${d.csv_file}`; 
+            document.getElementById('download-section').classList.add('show');
+            localStorage.setItem(DOWNLOAD_KEY, d.csv_file);
+        }
         document.getElementById('extract-contacts-btn').disabled = false; document.getElementById('extract-contacts-btn').innerHTML = '📧 提取联系方式';
     }
 });
 
+// 页面加载时恢复数据
+loadDataFromStorage();
 renderData();
+
+// 页面加载时检查任务状态
+async function checkTaskStatus() {
+    try {
+        const response = await fetch('/api/task_status');
+        const data = await response.json();
+        if (data.status === 'success' && data.is_running) {
+            // 有任务正在运行，显示停止按钮
+            isExtracting = true;
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('stop-btn').style.display = 'flex';
+            document.getElementById('progress-text').innerHTML = '<span class="spinner"></span> 任务进行中...';
+        }
+    } catch (e) {
+        console.warn('检查任务状态失败:', e);
+    }
+}
+checkTaskStatus();
+
 </script>
