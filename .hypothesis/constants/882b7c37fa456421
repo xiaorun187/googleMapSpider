@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/utils/performance_metrics.py
-# hypothesis_version: 6.148.7
-
-[0.0, 100, 'elapsed_seconds', 'errors', 'errors_by_type', 'eta_seconds', 'failed', 'failed_records', 'processed', 'processing_speed', 'speed', 'success_rate', 'successful', 'successful_records', 'summary', 'timestamp', 'total_records', 'total_time', 'total_time_seconds']

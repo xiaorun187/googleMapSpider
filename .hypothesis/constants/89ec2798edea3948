@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/models/business_record.py
-# hypothesis_version: 6.148.7
-
-[',', 'BusinessRecord', 'city', 'created_at', 'email', 'emails', 'facebook', 'id', 'instagram', 'linkedin', 'name', 'phones', 'product', 'send_count', 'twitter', 'unique_id', 'updated_at', 'website', 'whatsapp', 'youtube']

@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/utils/smart_wait.py
-# hypothesis_version: 6.148.7
-
-[0.1, 0.5, 'Network.disable', 'Network.enable', 'complete', 'execute_cdp_cmd']

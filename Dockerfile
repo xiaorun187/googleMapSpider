@@ -82,6 +82,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 只有这里变更时，才会重新构建这一层，前面的所有层都会复用缓存
 COPY . .
 
+# 设置启动脚本权限
+RUN chmod +x docker-entrypoint.sh
+
 # 设置环境变量，避免 Chrome 崩溃
 ENV CHROME_BIN=/usr/bin/google-chrome
 ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
@@ -92,5 +95,5 @@ EXPOSE 5000
 # 设置 Flask 端口变量 (app.py 会读取此变量)
 ENV PORT=5000
 
-# 运行 Flask 应用
-CMD ["python", "app.py"]
+# 使用自定义入口点脚本
+ENTRYPOINT ["./docker-entrypoint.sh"]

@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/db.py
-# hypothesis_version: 6.148.7
-
-[0.7, 1024, ' AND city = ?', ',', ', ', 'BEGIN TRANSACTION', '__main__', 'api_key_encrypted', 'business.db', 'city', 'code', 'created_at', 'email', 'emails', 'errors', 'facebook', 'gemini', 'gemini-1.5-flash', 'id', 'inserted_count', 'instagram', 'is_active', 'linkedin', 'max_tokens', 'model_name', 'name', 'phones', 'product', 'provider', 'skipped_count', 'success', 'temperature', 'twitter', 'unique_id', 'updated_at', 'updated_count', 'website', 'whatsapp', 'youtube', '数据库初始化完成']

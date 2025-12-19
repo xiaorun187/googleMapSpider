@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/utils/structured_logger.py
-# hypothesis_version: 6.148.7
-
-['ERROR', 'EXTRACT', 'INFO', 'PROGRESS', 'REQUEST', 'ScraperLogEntry', 'UNKNOWN', 'WARNING', 'a', 'error_type', 'errors_by_type', 'logs', 'message', 'scraper.log', 'success_rate', 'summary', 'timestamp', 'total', 'total_errors', 'total_extractions', 'total_requests', 'utf-8']

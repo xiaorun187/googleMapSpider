@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/utils/data_integrity_validator.py
-# hypothesis_version: 6.148.7
-
-[0.0, 0.15, 0.2, 0.25, 1.0, '=', 'actual_count', 'city', 'completeness', 'completeness_rate', 'duplicate_count', 'email', 'expected_count', 'field_reports', 'name', 'phones', 'quality_score', 'validation_time', 'website', '【字段完整性】', '【数量统计】', '【质量评分】', '数据完整性验证报告']

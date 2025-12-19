@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/validators/email_validator.py
-# hypothesis_version: 6.148.7
-
-[254, '.bmp', '.gif', '.jpeg', '.jpg', '.png', '.svg', '@', 'ValidationResult', '\\d+x\\d*', '\\d+x\\d+', '\\d{2,}x\\d+', 'image', 'img', 'logo', '邮箱包含图片文件扩展名', '邮箱包含尺寸模式（如NxM）', '邮箱地址为空或类型无效', '邮箱地址超过最大长度254字符', '邮箱格式不符合RFC 5322标准']

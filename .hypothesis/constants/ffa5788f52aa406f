@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/utils_export.py
-# hypothesis_version: 6.148.7
-
-['%Y%m%d_%H%M%S', ', ', ';', 'city', 'emails', 'facebook', 'instagram', 'linkedin', 'name', 'openpyxl', 'phones', 'twitter', 'utf-8-sig', 'website', 'whatsapp', 'youtube', '没有数据可保存']

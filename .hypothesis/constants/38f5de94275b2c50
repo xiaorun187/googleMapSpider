@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/validators/url_validator.py
-# hypothesis_version: 6.148.7
-
-['http', 'http://', 'https', 'https://']

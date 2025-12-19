@@ -1,4 +1,0 @@
-# file: /Users/hanglu/gooogleMapSpider/utils/data_deduplicator.py
-# hypothesis_version: 6.148.7
-
-['.', 'facebook', 'instagram', 'linkedin', 'phones', 'twitter', 'whatsapp', 'youtube']
