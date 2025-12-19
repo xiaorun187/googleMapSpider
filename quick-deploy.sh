@@ -9,7 +9,7 @@ set -e  # 遇到错误立即退出
 SERVER_IP="155.138.226.211"
 SERVER_USER="root"
 SERVER_PATH="/opt/google-maps-spider"
-LOCAL_PATH="$(dirname "$0")"
+LOCAL_PATH="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_PACKAGE="deploy-$(date +%Y%m%d-%H%M%S).zip"
 
 # 颜色输出
@@ -112,13 +112,26 @@ package_code() {
     log_info "创建部署包: $DEPLOY_PACKAGE"
     
     # 检查zip文件是否创建成功
-    if [ -f "$DEPLOY_PACKAGE" ]; then
-        log_info "部署包大小: $(ls -lh $DEPLOY_PACKAGE | awk '{print $5}')"
-        # 使用cat命令复制部署包到项目目录
-        cat "$DEPLOY_PACKAGE" > "$LOCAL_PATH/$DEPLOY_PACKAGE"
-        log_success "代码打包完成: $DEPLOY_PACKAGE"
+    if [ -f "$TEMP_DIR/$DEPLOY_PACKAGE" ]; then
+        log_info "部署包大小: $(ls -lh $TEMP_DIR/$DEPLOY_PACKAGE | awk '{print $5}')"
+        log_info "准备移动文件从 $TEMP_DIR/$DEPLOY_PACKAGE 到 $LOCAL_PATH/$DEPLOY_PACKAGE"
+        # 移动部署包到项目目录
+        mv "$TEMP_DIR/$DEPLOY_PACKAGE" "$LOCAL_PATH/$DEPLOY_PACKAGE"
+        
+        # 返回原始目录
+        cd "$LOCAL_PATH"
+        
+        # 检查文件是否成功移动
+        if [ -f "$LOCAL_PATH/$DEPLOY_PACKAGE" ]; then
+            log_success "代码打包完成: $DEPLOY_PACKAGE"
+        else
+            log_error "部署包移动失败"
+            log_info "检查 $LOCAL_PATH 目录内容: $(ls -la $LOCAL_PATH | grep deploy)"
+            exit 1
+        fi
     else
         log_error "创建部署包失败"
+        log_info "临时目录内容: $(ls -la $TEMP_DIR)"
         exit 1
     fi
     
@@ -129,6 +142,16 @@ package_code() {
 # 上传代码到服务器
 upload_code() {
     log_info "上传代码到服务器..."
+    
+    # 检查部署包是否存在
+    if [ ! -f "$LOCAL_PATH/$DEPLOY_PACKAGE" ]; then
+        log_error "部署包不存在: $LOCAL_PATH/$DEPLOY_PACKAGE"
+        log_info "当前目录: $(pwd)"
+        log_info "LOCAL_PATH: $LOCAL_PATH"
+        log_info "DEPLOY_PACKAGE: $DEPLOY_PACKAGE"
+        log_info "目录内容: $(ls -la $LOCAL_PATH | grep deploy)"
+        exit 1
+    fi
     
     # 确保服务器目录存在
     ssh $SERVER_USER@$SERVER_IP "mkdir -p $SERVER_PATH"
