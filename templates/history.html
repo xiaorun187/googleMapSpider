@@ -6,29 +6,29 @@
     <title>历史记录 - Google Maps 商家提取</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 16px; }
-        .container { max-width: 1800px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 14px 24px; background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
-        .header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 10px; }
-        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-        .nav-links { display: flex; gap: 10px; }
-        .nav-links a { padding: 9px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 9px; font-size: 13px; font-weight: 500; transition: all 0.3s; }
-        .nav-links a:hover { transform: translateY(-2px); }
-        .card { background: rgba(255,255,255,0.98); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
-        .card-header { padding: 14px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .search-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .search-row input { padding: 9px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 13px; width: 180px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; padding: 10px; overflow: hidden; }
+        .container { max-width: 1800px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 8px 20px; background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); flex-shrink: 0; }
+        .header h1 { font-size: 18px; font-weight: 700; color: #1a1a2e; display: flex; align-items: center; gap: 8px; }
+        .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-links a { padding: 8px 14px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 8px; font-size: 12px; font-weight: 500; }
+        .card { background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .card-header { padding: 10px 16px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+        .search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .search-row input { padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; width: 160px; }
         .search-row input:focus { outline: none; border-color: #667eea; }
-        .search-row select { padding: 9px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 13px; background: white; }
-        .search-row label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4a5568; cursor: pointer; }
-        .search-row label input { width: 15px; height: 15px; accent-color: #667eea; }
-        .btn { padding: 9px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+        .search-row select { padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; background: white; }
+        .search-row label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #4a5568; cursor: pointer; }
+        .search-row label input { width: 14px; height: 14px; accent-color: #667eea; }
+        .btn { padding: 7px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
         .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
         .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; }
         .btn-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-        .btn:hover { transform: translateY(-1px); }
-        .column-toggles { display: flex; gap: 14px; flex-wrap: wrap; }
-        .column-toggles label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #64748b; cursor: pointer; }
+        .btn:hover { opacity: 0.9; }
+        .column-toggles { display: flex; gap: 12px; flex-wrap: wrap; }
+        .column-toggles label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #64748b; cursor: pointer; }
+        .table-wrapper { flex: 1; overflow: auto; min-height: 0; }
     </style>
 </head>
 <body>
@@ -37,17 +37,58 @@
         <h1><span class="logo-icon">📋</span>历史记录</h1>
         <nav class="nav-links"><a href="/operation">🔍 数据提取</a><a href="/send_email_page">✉️ 发送邮件</a></nav>
     </header>
+    
+    <!-- 编辑/新增模态框 -->
+    <div class="modal" id="edit-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">编辑记录</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="record-form">
+                <input type="hidden" id="record-id">
+                <div class="form-row"><label>商家名称 *</label><input type="text" id="record-name" required></div>
+                <div class="form-row"><label>网站</label><input type="text" id="record-website" placeholder="https://..."></div>
+                <div class="form-row"><label>邮箱</label><input type="email" id="record-email"></div>
+                <div class="form-row"><label>电话</label><input type="text" id="record-phones" placeholder="多个电话用逗号分隔"></div>
+                <div class="form-row"><label>城市</label><input type="text" id="record-city"></div>
+                <div class="form-row"><label>商品/关键词</label><input type="text" id="record-product"></div>
+                <div class="form-row"><label>Facebook</label><input type="text" id="record-facebook"></div>
+                <div class="form-row"><label>Twitter</label><input type="text" id="record-twitter"></div>
+                <div class="form-row"><label>Instagram</label><input type="text" id="record-instagram"></div>
+                <div class="form-row"><label>LinkedIn</label><input type="text" id="record-linkedin"></div>
+                <div class="form-row"><label>WhatsApp</label><input type="text" id="record-whatsapp"></div>
+                <div class="form-row"><label>YouTube</label><input type="text" id="record-youtube"></div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn" style="background: #e2e8f0; color: #4a5568;" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveRecord()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 删除确认对话框 -->
+    <div class="modal" id="delete-modal">
+        <div class="modal-content confirm-dialog">
+            <p id="delete-message">确定要删除这条记录吗？</p>
+            <div class="modal-footer" style="justify-content: center;">
+                <button class="btn" style="background: #e2e8f0; color: #4a5568;" onclick="closeDeleteModal()">取消</button>
+                <button class="btn" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white;" onclick="confirmDelete()">确认删除</button>
+            </div>
+        </div>
+    </div>
     <div class="card">
         <div class="card-header">
             <div class="search-row">
                 <input type="text" id="search-query" placeholder="搜索名称或邮箱...">
-                <select id="page-size"><option value="10">10条/页</option><option value="20">20条/页</option><option value="50">50条/页</option></select>
                 <label><input type="checkbox" id="show-empty-email"> 显示空邮箱</label>
                 <button class="btn btn-primary" id="search-btn">🔍 搜索</button>
             </div>
             <div class="search-row">
+                <button class="btn btn-primary" id="add-record-btn">➕ 新增记录</button>
                 <button class="btn btn-success" id="send-selected-btn">✉️ 发送选中</button>
                 <button class="btn btn-warning" id="export-excel-btn">📥 导出Excel</button>
+                <button class="btn" id="delete-selected-btn" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white;">🗑️ 删除选中</button>
             </div>
         </div>
         <div class="card-header" style="padding: 10px 20px; background: #f8fafc;">
@@ -61,7 +102,7 @@
                 <label><input type="checkbox" id="toggle-youtube"> YouTube</label>
             </div>
         </div>
-        <div style="overflow-x:auto;">
+        <div class="table-wrapper">
             <table id="history-table"></table>
         </div>
         <div class="pagination" id="pagination"></div>
@@ -72,18 +113,49 @@
 
 <style>
     #history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    #history-table th { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 11px 14px; text-align: left; font-weight: 600; white-space: nowrap; }
-    #history-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; color: #334155; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #history-table th { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 10px 12px; text-align: left; font-weight: 600; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+    #history-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #334155; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #history-table tr:hover td { background: #f8fafc; }
     #history-table a { color: #667eea; text-decoration: none; }
     #history-table a:hover { text-decoration: underline; }
-    #history-table input[type="checkbox"] { width: 15px; height: 15px; accent-color: #667eea; }
+    #history-table input[type="checkbox"] { width: 14px; height: 14px; accent-color: #667eea; }
     .col-hidden { display: none; }
-    .pagination { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 12px 20px; border-top: 1px solid #e2e8f0; }
-    .pagination button { padding: 6px 12px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 10px 16px; border-top: 1px solid #e2e8f0; flex-shrink: 0; flex-wrap: wrap; }
+    .pagination button { padding: 5px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 5px; cursor: pointer; font-size: 11px; font-weight: 500; }
     .pagination button:hover:not(:disabled) { border-color: #667eea; color: #667eea; }
     .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .pagination .page-info { font-size: 12px; color: #64748b; }
+    .pagination button.active { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-color: transparent; }
+    .pagination .page-info { font-size: 11px; color: #64748b; }
+    .pagination .total-info { font-size: 11px; color: #4a5568; font-weight: 500; margin-right: 10px; }
+    .pagination .page-size-select { padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 11px; background: white; }
+    .pagination .goto-input { width: 50px; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 11px; text-align: center; }
+    .pagination .goto-btn { padding: 4px 8px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; }
+    .pagination .goto-btn:hover { opacity: 0.9; }
+    
+    /* 操作按钮 */
+    .action-btn { padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; margin-right: 4px; }
+    .action-btn.edit { background: #e0f2fe; color: #0284c7; }
+    .action-btn.delete { background: #fee2e2; color: #dc2626; }
+    .action-btn:hover { opacity: 0.8; }
+    
+    /* 模态框 */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+    .modal.show { display: flex; }
+    .modal-content { background: white; border-radius: 14px; padding: 24px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h3 { font-size: 18px; color: #1a1a2e; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #94a3b8; }
+    .modal-close:hover { color: #64748b; }
+    .form-row { margin-bottom: 14px; }
+    .form-row label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
+    .form-row input, .form-row textarea { width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 13px; }
+    .form-row input:focus, .form-row textarea:focus { outline: none; border-color: #667eea; }
+    .form-row textarea { resize: vertical; min-height: 60px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+    
+    /* 确认对话框 */
+    .confirm-dialog { text-align: center; }
+    .confirm-dialog p { margin-bottom: 20px; color: #4a5568; }
 </style>
 <script>
 let currentPage = 1, pageSize = 10, showEmptyEmail = false;
@@ -92,41 +164,264 @@ const cols = { facebook: false, twitter: false, instagram: false, linkedin: fals
 function fmt(v) { return v && v.startsWith('http') ? `<a href="${v}" target="_blank">${v.slice(0,30)}...</a>` : (v || '-'); }
 function fmtDate(d) { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? '-' : dt.toLocaleString('zh-CN'); }
 
-function render(records, totalPages) {
+let pendingDeleteIds = [];
+
+function render(records, totalPages, total) {
     const t = document.getElementById('history-table');
-    let h = `<thead><tr><th><input type="checkbox" id="select-all"></th><th>ID</th><th>名称</th><th>网站</th><th>邮箱</th><th>电话</th>
+    let h = `<thead><tr><th><input type="checkbox" id="select-all"></th><th>ID</th><th>名称</th><th>网站</th><th>邮箱</th><th>电话</th><th>城市</th><th>商品</th>
         <th class="${cols.facebook?'':'col-hidden'}">Facebook</th><th class="${cols.twitter?'':'col-hidden'}">Twitter</th>
         <th class="${cols.instagram?'':'col-hidden'}">Instagram</th><th class="${cols.linkedin?'':'col-hidden'}">LinkedIn</th>
         <th class="${cols.whatsapp?'':'col-hidden'}">WhatsApp</th><th class="${cols.youtube?'':'col-hidden'}">YouTube</th>
-        <th>发送次数</th><th>更新时间</th></tr></thead><tbody>`;
-    records.forEach(r => {
-        h += `<tr><td><input type="checkbox" class="sel" data-email="${r.email||''}"></td><td>${r.id||'-'}</td><td>${r.name||'-'}</td>
-            <td>${fmt(r.website)}</td><td>${r.email||'-'}</td><td>${r.phones||'-'}</td>
-            <td class="${cols.facebook?'':'col-hidden'}">${fmt(r.facebook)}</td><td class="${cols.twitter?'':'col-hidden'}">${fmt(r.twitter)}</td>
-            <td class="${cols.instagram?'':'col-hidden'}">${fmt(r.instagram)}</td><td class="${cols.linkedin?'':'col-hidden'}">${fmt(r.linkedin)}</td>
-            <td class="${cols.whatsapp?'':'col-hidden'}">${fmt(r.whatsapp)}</td><td class="${cols.youtube?'':'col-hidden'}">${fmt(r.youtube)}</td>
-            <td>${r.send_count||0}</td><td>${fmtDate(r.updated_at)}</td></tr>`;
-    });
+        <th>发送次数</th><th>更新时间</th><th>操作</th></tr></thead><tbody>`;
+    
+    if (!records || records.length === 0) {
+        h += `<tr><td colspan="17" style="text-align: center; padding: 40px; color: #94a3b8;">暂无数据</td></tr>`;
+    } else {
+        records.forEach(r => {
+            h += `<tr data-id="${r.id}"><td><input type="checkbox" class="sel" data-email="${r.email||''}" data-id="${r.id}"></td><td>${r.id||'-'}</td><td>${r.name||'-'}</td>
+                <td>${fmt(r.website)}</td><td>${r.email||'-'}</td><td>${r.phones||'-'}</td><td>${r.city||'-'}</td><td>${r.product||'-'}</td>
+                <td class="${cols.facebook?'':'col-hidden'}">${fmt(r.facebook)}</td><td class="${cols.twitter?'':'col-hidden'}">${fmt(r.twitter)}</td>
+                <td class="${cols.instagram?'':'col-hidden'}">${fmt(r.instagram)}</td><td class="${cols.linkedin?'':'col-hidden'}">${fmt(r.linkedin)}</td>
+                <td class="${cols.whatsapp?'':'col-hidden'}">${fmt(r.whatsapp)}</td><td class="${cols.youtube?'':'col-hidden'}">${fmt(r.youtube)}</td>
+                <td>${r.send_count||0}</td><td>${fmtDate(r.updated_at)}</td>
+                <td><button class="action-btn edit" onclick="editRecord(${r.id})">✏️</button><button class="action-btn delete" onclick="deleteRecord(${r.id})">🗑️</button></td></tr>`;
+        });
+    }
     h += '</tbody>';
     t.innerHTML = h;
-    document.getElementById('select-all').addEventListener('change', e => document.querySelectorAll('.sel').forEach(c => c.checked = e.target.checked));
     
-    const pag = document.getElementById('pagination');
-    pag.innerHTML = `<button ${currentPage===1?'disabled':''} onclick="go(${currentPage-1})">上一页</button>
-        <span class="page-info">第 ${currentPage} / ${totalPages} 页</span>
-        <button ${currentPage>=totalPages?'disabled':''} onclick="go(${currentPage+1})">下一页</button>`;
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) {
+        selectAll.addEventListener('change', e => document.querySelectorAll('.sel').forEach(c => c.checked = e.target.checked));
+    }
+    
+    renderPagination(totalPages, total);
 }
+
+function renderPagination(totalPages, total) {
+    const pag = document.getElementById('pagination');
+    const tp = totalPages || 1;
+    const totalCount = total || 0;
+    
+    // 生成页码按钮
+    let pageButtons = '';
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(tp, startPage + maxVisiblePages - 1);
+    if (endPage - startPage < maxVisiblePages - 1) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    if (startPage > 1) {
+        pageButtons += `<button onclick="go(1)">1</button>`;
+        if (startPage > 2) pageButtons += `<span class="page-info">...</span>`;
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        pageButtons += `<button class="${i === currentPage ? 'active' : ''}" onclick="go(${i})">${i}</button>`;
+    }
+    
+    if (endPage < tp) {
+        if (endPage < tp - 1) pageButtons += `<span class="page-info">...</span>`;
+        pageButtons += `<button onclick="go(${tp})">${tp}</button>`;
+    }
+    
+    pag.innerHTML = `
+        <span class="total-info">共 ${totalCount} 条记录</span>
+        <button ${currentPage===1?'disabled':''} onclick="go(1)">首页</button>
+        <button ${currentPage===1?'disabled':''} onclick="go(${currentPage-1})">上一页</button>
+        ${pageButtons}
+        <button ${currentPage>=tp?'disabled':''} onclick="go(${currentPage+1})">下一页</button>
+        <button ${currentPage>=tp?'disabled':''} onclick="go(${tp})">末页</button>
+        <select class="page-size-select" onchange="changePageSize(this.value)">
+            <option value="10" ${pageSize===10?'selected':''}>10条/页</option>
+            <option value="20" ${pageSize===20?'selected':''}>20条/页</option>
+            <option value="50" ${pageSize===50?'selected':''}>50条/页</option>
+            <option value="100" ${pageSize===100?'selected':''}>100条/页</option>
+        </select>
+        <span class="page-info">跳转到</span>
+        <input type="number" class="goto-input" id="goto-page" min="1" max="${tp}" value="${currentPage}">
+        <button class="goto-btn" onclick="gotoPage()">GO</button>
+    `;
+}
+
+window.changePageSize = function(size) {
+    pageSize = parseInt(size);
+    currentPage = 1;
+    load();
+};
+
+window.gotoPage = function() {
+    const input = document.getElementById('goto-page');
+    const page = parseInt(input.value);
+    if (page && page >= 1) {
+        go(page);
+    }
+};
+
+// 模态框操作
+function openModal(title = '编辑记录') {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('edit-modal').classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('edit-modal').classList.remove('show');
+    document.getElementById('record-form').reset();
+    document.getElementById('record-id').value = '';
+}
+
+function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.remove('show');
+    pendingDeleteIds = [];
+}
+
+// 新增记录
+document.getElementById('add-record-btn').addEventListener('click', () => {
+    document.getElementById('record-id').value = '';
+    document.getElementById('record-form').reset();
+    openModal('新增记录');
+});
+
+// 编辑记录
+async function editRecord(id) {
+    try {
+        const res = await fetch(`/api/records/${id}`);
+        const data = await res.json();
+        if (data.status === 'success') {
+            const r = data.record;
+            document.getElementById('record-id').value = r.id;
+            document.getElementById('record-name').value = r.name || '';
+            document.getElementById('record-website').value = r.website || '';
+            document.getElementById('record-email').value = r.email || '';
+            document.getElementById('record-phones').value = r.phones || '';
+            document.getElementById('record-city').value = r.city || '';
+            document.getElementById('record-product').value = r.product || '';
+            document.getElementById('record-facebook').value = r.facebook || '';
+            document.getElementById('record-twitter').value = r.twitter || '';
+            document.getElementById('record-instagram').value = r.instagram || '';
+            document.getElementById('record-linkedin').value = r.linkedin || '';
+            document.getElementById('record-whatsapp').value = r.whatsapp || '';
+            document.getElementById('record-youtube').value = r.youtube || '';
+            openModal('编辑记录');
+        } else {
+            alert('获取记录失败: ' + data.message);
+        }
+    } catch (e) {
+        alert('获取记录失败: ' + e.message);
+    }
+}
+
+// 保存记录
+async function saveRecord() {
+    const id = document.getElementById('record-id').value;
+    const data = {
+        name: document.getElementById('record-name').value,
+        website: document.getElementById('record-website').value,
+        email: document.getElementById('record-email').value,
+        phones: document.getElementById('record-phones').value,
+        city: document.getElementById('record-city').value,
+        product: document.getElementById('record-product').value,
+        facebook: document.getElementById('record-facebook').value,
+        twitter: document.getElementById('record-twitter').value,
+        instagram: document.getElementById('record-instagram').value,
+        linkedin: document.getElementById('record-linkedin').value,
+        whatsapp: document.getElementById('record-whatsapp').value,
+        youtube: document.getElementById('record-youtube').value
+    };
+    
+    try {
+        const url = id ? `/api/records/${id}` : '/api/records';
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+            closeModal();
+            load();
+            alert(id ? '记录更新成功' : '记录创建成功');
+        } else {
+            alert('保存失败: ' + result.message);
+        }
+    } catch (e) {
+        alert('保存失败: ' + e.message);
+    }
+}
+
+// 删除单条记录
+function deleteRecord(id) {
+    pendingDeleteIds = [id];
+    document.getElementById('delete-message').textContent = '确定要删除这条记录吗？';
+    document.getElementById('delete-modal').classList.add('show');
+}
+
+// 批量删除
+document.getElementById('delete-selected-btn').addEventListener('click', () => {
+    const ids = [...document.querySelectorAll('.sel:checked')].map(c => parseInt(c.dataset.id)).filter(id => !isNaN(id));
+    if (ids.length === 0) {
+        alert('请先选择要删除的记录');
+        return;
+    }
+    pendingDeleteIds = ids;
+    document.getElementById('delete-message').textContent = `确定要删除选中的 ${ids.length} 条记录吗？`;
+    document.getElementById('delete-modal').classList.add('show');
+});
+
+// 确认删除
+async function confirmDelete() {
+    if (pendingDeleteIds.length === 0) return;
+    
+    try {
+        let res;
+        if (pendingDeleteIds.length === 1) {
+            res = await fetch(`/api/records/${pendingDeleteIds[0]}`, { method: 'DELETE' });
+        } else {
+            res = await fetch('/api/records/batch-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: pendingDeleteIds })
+            });
+        }
+        const result = await res.json();
+        if (result.status === 'success') {
+            closeDeleteModal();
+            load();
+            alert(result.message || '删除成功');
+        } else {
+            alert('删除失败: ' + result.message);
+        }
+    } catch (e) {
+        alert('删除失败: ' + e.message);
+    }
+}
+
+let totalRecords = 0;
 
 function load() {
     const q = document.getElementById('search-query').value;
     fetch(`/get_history?page=${currentPage}&size=${pageSize}&query=${encodeURIComponent(q)}&show_empty_email=${showEmptyEmail}`)
-        .then(r => r.json()).then(d => render(d.records, d.total_pages));
+        .then(r => r.json())
+        .then(d => {
+            if (d.status === 'error') {
+                console.error('加载数据失败:', d.message);
+                render([], 1, 0);
+            } else {
+                totalRecords = d.total || 0;
+                render(d.records || [], d.total_pages || 1, totalRecords);
+            }
+        })
+        .catch(e => {
+            console.error('请求失败:', e);
+            render([], 1, 0);
+        });
 }
 
 window.go = p => { currentPage = p; load(); };
 
 document.getElementById('search-btn').addEventListener('click', () => { currentPage = 1; load(); });
-document.getElementById('page-size').addEventListener('change', e => { pageSize = parseInt(e.target.value); currentPage = 1; load(); });
 document.getElementById('show-empty-email').addEventListener('change', e => { showEmptyEmail = e.target.checked; currentPage = 1; load(); });
 
 ['facebook','twitter','instagram','linkedin','whatsapp','youtube'].forEach(k => {
@@ -141,7 +436,7 @@ document.getElementById('send-selected-btn').addEventListener('click', () => {
 
 document.getElementById('export-excel-btn').addEventListener('click', () => {
     const q = document.getElementById('search-query').value;
-    const visibleCols = ['id','name','website','email','phones',...Object.keys(cols).filter(k=>cols[k]),'send_count','updated_at','created_at'];
+    const visibleCols = ['id','name','website','email','phones','city','product',...Object.keys(cols).filter(k=>cols[k]),'send_count','updated_at','created_at'];
     fetch(`/export_excel?query=${encodeURIComponent(q)}&show_empty_email=${showEmptyEmail}&columns=${encodeURIComponent(JSON.stringify(visibleCols))}`)
         .then(r => r.blob()).then(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `history_${new Date().toISOString().slice(0,10)}.xlsx`; a.click(); });
 });
