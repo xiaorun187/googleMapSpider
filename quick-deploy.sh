@@ -204,6 +204,9 @@ show_logs() {
 update_only() {
     log_info "更新服务器代码并重启应用..."
     
+    # 打包代码
+    package_code
+    
     # 上传代码
     upload_code
     

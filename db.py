@@ -138,6 +138,7 @@ def init_database():
             CREATE TABLE IF NOT EXISTS ai_configurations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 provider TEXT NOT NULL DEFAULT 'gemini',
+                api_endpoint TEXT,
                 api_key_encrypted TEXT,
                 model_name TEXT DEFAULT 'gemini-1.5-flash',
                 temperature REAL DEFAULT 0.7,
@@ -147,6 +148,12 @@ def init_database():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        
+        # 添加 api_endpoint 字段到现有表（如果不存在）
+        try:
+            cursor.execute("ALTER TABLE ai_configurations ADD COLUMN api_endpoint TEXT")
+        except Error:
+            pass  # 列已存在
         
         # 创建 country_city_mappings 表 (Requirements 10.3)
         cursor.execute("""
@@ -307,6 +314,162 @@ def validate_uniqueness(name: str, website: str, exclude_id: int = None) -> Vali
         )
     
     return ValidationResult(is_valid=True)
+
+
+def validate_business_data(business: dict) -> tuple[bool, str]:
+    """
+    验证单条商家数据的有效性
+    
+    Args:
+        business: 商家数据字典
+        
+    Returns:
+        tuple: (是否有效, 错误信息)
+    """
+    if not isinstance(business, dict):
+        return False, "数据格式无效：不是字典类型"
+    
+    name = business.get('name', '')
+    if not name or not isinstance(name, str) or not name.strip():
+        return False, "商家名称为空或无效"
+    
+    # 检查是否包含无效的嵌套结构
+    if 'results' in business or 'validation' in business:
+        return False, "数据包含无效的嵌套结构"
+    
+    return True, ""
+
+
+def save_single_business_to_db(business: dict) -> dict:
+    """
+    实时保存单条商家数据到数据库
+    
+    Features:
+    - 单条数据验证
+    - 基于 name + website 的唯一性判断
+    - 事务完整性保证
+    - 详细的日志记录
+    
+    Args:
+        business: 单条商家数据字典
+        
+    Returns:
+        dict: 包含 success, action (inserted/updated/skipped), error 的结果
+    """
+    result = {
+        'success': False,
+        'action': None,  # 'inserted', 'updated', 'skipped'
+        'error': None,
+        'record_id': None,
+        'name': business.get('name', 'Unknown')
+    }
+    
+    # 数据验证
+    is_valid, error_msg = validate_business_data(business)
+    if not is_valid:
+        result['error'] = error_msg
+        result['action'] = 'skipped'
+        print(f"[DB] 数据验证失败 [{result['name']}]: {error_msg}", file=sys.stderr)
+        return result
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            result['error'] = "无法获取数据库连接"
+            print(f"[DB ERROR] 无法获取数据库连接", file=sys.stderr)
+            return result
+        
+        cursor = connection.cursor()
+        
+        # 提取数据字段
+        name = business.get('name', '').strip()
+        website = business.get('website', '') or ''
+        emails = business.get('emails', []) if business.get('emails') else []
+        phones = ', '.join(business.get('phones', [])) if business.get('phones') else ''
+        facebook = business.get('facebook', '') or ''
+        twitter = business.get('twitter', '') or ''
+        instagram = business.get('instagram', '') or ''
+        linkedin = business.get('linkedin', '') or ''
+        whatsapp = business.get('whatsapp', '') or ''
+        youtube = business.get('youtube', '') or ''
+        city = business.get('city', '') or ''
+        product = business.get('product', '') or ''
+        
+        # 检查数据库中是否存在重复
+        existing = check_duplicate_exists(name, website)
+        
+        if existing:
+            # 更新现有记录
+            email_value = emails[0] if emails else None
+            cursor.execute("""
+                UPDATE business_records 
+                SET email = COALESCE(?, email),
+                    phones = COALESCE(NULLIF(?, ''), phones),
+                    facebook = COALESCE(NULLIF(?, ''), facebook),
+                    twitter = COALESCE(NULLIF(?, ''), twitter),
+                    instagram = COALESCE(NULLIF(?, ''), instagram),
+                    linkedin = COALESCE(NULLIF(?, ''), linkedin),
+                    whatsapp = COALESCE(NULLIF(?, ''), whatsapp),
+                    youtube = COALESCE(NULLIF(?, ''), youtube),
+                    city = COALESCE(NULLIF(?, ''), city),
+                    product = COALESCE(NULLIF(?, ''), product),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (email_value, phones, facebook, twitter, instagram, 
+                  linkedin, whatsapp, youtube, city, product, existing['id']))
+            
+            connection.commit()
+            result['success'] = True
+            result['action'] = 'updated'
+            result['record_id'] = existing['id']
+            print(f"[DB] 更新记录 [{name}] ID={existing['id']}", file=sys.stderr)
+        else:
+            # 插入新记录
+            unique_id = generate_unique_id()
+            email_value = emails[0] if emails else None
+            
+            cursor.execute("""
+                INSERT INTO business_records 
+                (unique_id, name, website, email, phones, facebook, twitter, 
+                 instagram, linkedin, whatsapp, youtube, city, product, send_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            """, (unique_id, name, website, email_value, phones, facebook, 
+                  twitter, instagram, linkedin, whatsapp, youtube, city, product))
+            
+            connection.commit()
+            result['success'] = True
+            result['action'] = 'inserted'
+            result['record_id'] = cursor.lastrowid
+            print(f"[DB] 插入新记录 [{name}] ID={result['record_id']}", file=sys.stderr)
+        
+    except Error as e:
+        if connection:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        result['error'] = str(e)
+        print(f"[DB ERROR] 保存失败 [{result['name']}]: {e}", file=sys.stderr)
+    except Exception as e:
+        if connection:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        result['error'] = str(e)
+        print(f"[DB ERROR] 未知错误 [{result['name']}]: {e}", file=sys.stderr)
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        release_connection(connection)
+    
+    return result
 
 
 def save_business_data_to_db(business_data):

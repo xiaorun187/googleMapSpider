@@ -505,9 +505,23 @@ document.getElementById('send-email-btn').addEventListener('click', function() {
 
 socket.on('progress_update', function(d) {
     document.getElementById('progress-bar').style.width = d.progress + '%';
-    document.getElementById('progress-text').innerHTML = d.progress < 100 ? `<span class="spinner"></span> ${d.message}` : d.message;
+    
+    // 构建进度消息，包含数据库保存统计
+    let progressMsg = d.message;
+    if (d.progress < 100 && d.progress > 20 && (dbStats.inserted > 0 || dbStats.updated > 0)) {
+        progressMsg += ` | 已入库: ${dbStats.inserted}新/${dbStats.updated}更新`;
+    }
+    document.getElementById('progress-text').innerHTML = d.progress < 100 ? `<span class="spinner"></span> ${progressMsg}` : progressMsg;
+    
     if (d.business_data) { businessData.push(d.business_data); saveDataToStorage(); renderData(); }
     if (d.progress === 100 || d.stopping) {
+        // 显示最终统计
+        const finalMsg = d.message + (dbStats.inserted > 0 || dbStats.updated > 0 ? ` (入库: ${dbStats.inserted}新增, ${dbStats.updated}更新)` : '');
+        document.getElementById('progress-text').innerHTML = finalMsg;
+        
+        // 重置统计
+        dbStats = { inserted: 0, updated: 0, skipped: 0, errors: 0 };
+        
         if (d.data) { businessData = d.data; currentPage = 1; saveDataToStorage(); renderData(); }
         if (d.csv_file) { 
             document.getElementById('download-btn').href = `/download/${d.csv_file}`; 
@@ -533,6 +547,24 @@ socket.on('contact_update', function(d) {
             localStorage.setItem(DOWNLOAD_KEY, d.csv_file);
         }
         document.getElementById('extract-contacts-btn').disabled = false; document.getElementById('extract-contacts-btn').innerHTML = '📧 提取联系方式';
+    }
+});
+
+// 数据库实时保存状态监听
+let dbStats = { inserted: 0, updated: 0, skipped: 0, errors: 0 };
+socket.on('db_save_status', function(d) {
+    if (d.stats) {
+        dbStats = d.stats;
+    }
+    // 更新进度文本显示数据库保存统计
+    const statsText = `已入库: ${dbStats.inserted} 新增, ${dbStats.updated} 更新`;
+    const progressText = document.getElementById('progress-text');
+    if (progressText && !progressText.innerHTML.includes('入库')) {
+        // 在现有消息后追加数据库统计
+    }
+    
+    if (!d.success && d.error) {
+        console.warn(`数据库保存失败 [${d.name}]: ${d.error}`);
     }
 });
 

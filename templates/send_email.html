@@ -186,7 +186,21 @@
 <script>
 const urlParams = new URLSearchParams(window.location.search);
 const csvFile = urlParams.get('file') || 'No file generated';
-let emails = decodeURIComponent(urlParams.get('emails') || '').split(',').filter(e => e && e.trim());
+
+// 解析邮箱列表 - 每个邮箱单独解码
+const emailsParam = urlParams.get('emails') || '';
+let emails = emailsParam
+    .split(',')
+    .map(e => {
+        try {
+            return decodeURIComponent(e).trim();
+        } catch {
+            return e.trim();
+        }
+    })
+    .filter(e => e && e.length > 0 && e !== 'undefined' && e !== 'null');
+
+console.log('接收到的邮箱列表:', emails);
 
 function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
 

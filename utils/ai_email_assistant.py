@@ -212,18 +212,20 @@ class AIEmailAssistant:
         Returns:
             EmailGenerationResult: 生成结果
         """
+        import sys
+        
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {api_key}'
         }
         
-        # 构建请求体（兼容OpenAI格式）
+        # 构建请求体（兼容智谱AI和OpenAI格式）
         payload = {
             'model': self._config.model,
             'messages': [
                 {
                     'role': 'system',
-                    'content': '你是一个专业的商务邮件写作助手，擅长撰写简洁、专业、有说服力的商务邮件。'
+                    'content': '你是一个专业的商务邮件写作助手，擅长撰写简洁、专业、有说服力的商务邮件。请直接输出邮件内容，不要添加额外的解释。'
                 },
                 {
                     'role': 'user',
@@ -231,15 +233,44 @@ class AIEmailAssistant:
                 }
             ],
             'temperature': 0.7,
-            'max_tokens': 1000
+            'stream': False,
+            'do_sample': True,
+            'top_p': 0.95,
+            'response_format': {'type': 'text'}
         }
         
-        response = requests.post(
-            self._config.api_endpoint,
-            headers=headers,
-            json=payload,
-            timeout=self.DEFAULT_TIMEOUT
-        )
+        print(f"[AI] 请求URL: {self._config.api_endpoint}", file=sys.stderr)
+        print(f"[AI] 请求模型: {self._config.model}", file=sys.stderr)
+        
+        try:
+            response = requests.post(
+                self._config.api_endpoint,
+                headers=headers,
+                json=payload,
+                timeout=30  # 增加超时时间
+            )
+            
+            print(f"[AI] 响应状态码: {response.status_code}", file=sys.stderr)
+            print(f"[AI] 响应内容: {response.text[:500] if response.text else 'empty'}", file=sys.stderr)
+            
+        except requests.exceptions.Timeout:
+            return EmailGenerationResult(
+                success=False,
+                content='',
+                error_message='API请求超时，请稍后重试'
+            )
+        except requests.exceptions.ConnectionError as e:
+            return EmailGenerationResult(
+                success=False,
+                content='',
+                error_message=f'无法连接到AI服务: {str(e)}'
+            )
+        except Exception as e:
+            return EmailGenerationResult(
+                success=False,
+                content='',
+                error_message=f'请求异常: {str(e)}'
+            )
         
         if response.status_code == 401:
             return EmailGenerationResult(
@@ -256,15 +287,24 @@ class AIEmailAssistant:
             )
         
         if response.status_code != 200:
+            error_msg = f'API返回错误: HTTP {response.status_code}'
+            try:
+                error_data = response.json()
+                if 'error' in error_data:
+                    error_msg = f"API错误: {error_data['error'].get('message', str(error_data['error']))}"
+            except Exception:
+                pass
             return EmailGenerationResult(
                 success=False,
                 content='',
-                error_message=f'API返回错误: HTTP {response.status_code}'
+                error_message=error_msg
             )
         
         try:
             data = response.json()
             content = self._extract_content(data)
+            
+            print(f"[AI] 提取的内容长度: {len(content) if content else 0}", file=sys.stderr)
             
             if content:
                 return EmailGenerationResult(
@@ -275,13 +315,13 @@ class AIEmailAssistant:
                 return EmailGenerationResult(
                     success=False,
                     content='',
-                    error_message='AI返回的内容为空'
+                    error_message='AI返回的内容为空，请重试'
                 )
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             return EmailGenerationResult(
                 success=False,
                 content='',
-                error_message='无法解析API响应'
+                error_message=f'无法解析API响应: {str(e)}'
             )
     
     def _extract_content(self, data: dict) -> str:
@@ -294,20 +334,66 @@ class AIEmailAssistant:
         Returns:
             str: 提取的内容
         """
-        # OpenAI格式
+        import sys
+        
+        print(f"[AI] 解析响应数据: {json.dumps(data, ensure_ascii=False)[:1000]}", file=sys.stderr)
+        
+        # OpenAI/智谱AI 格式: choices[0].message.content
         if 'choices' in data and len(data['choices']) > 0:
             choice = data['choices'][0]
-            if 'message' in choice and 'content' in choice['message']:
-                return choice['message']['content'].strip()
+            
+            # 标准格式: message.content
+            if 'message' in choice:
+                message = choice['message']
+                if isinstance(message, dict) and 'content' in message:
+                    content = message['content']
+                    if content:
+                        print(f"[AI] 从 choices[0].message.content 提取内容", file=sys.stderr)
+                        return content.strip()
+            
+            # 备用格式: delta.content (流式响应)
+            if 'delta' in choice:
+                delta = choice['delta']
+                if isinstance(delta, dict) and 'content' in delta:
+                    content = delta['content']
+                    if content:
+                        print(f"[AI] 从 choices[0].delta.content 提取内容", file=sys.stderr)
+                        return content.strip()
+            
+            # 旧格式: text
             if 'text' in choice:
-                return choice['text'].strip()
+                content = choice['text']
+                if content:
+                    print(f"[AI] 从 choices[0].text 提取内容", file=sys.stderr)
+                    return content.strip()
         
         # 其他可能的格式
         if 'content' in data:
-            return data['content'].strip()
-        if 'text' in data:
-            return data['text'].strip()
-        if 'response' in data:
-            return data['response'].strip()
+            content = data['content']
+            if content:
+                print(f"[AI] 从 data.content 提取内容", file=sys.stderr)
+                return content.strip()
         
+        if 'text' in data:
+            content = data['text']
+            if content:
+                print(f"[AI] 从 data.text 提取内容", file=sys.stderr)
+                return content.strip()
+        
+        if 'response' in data:
+            content = data['response']
+            if content:
+                print(f"[AI] 从 data.response 提取内容", file=sys.stderr)
+                return content.strip()
+        
+        # 智谱AI 可能的其他格式
+        if 'data' in data:
+            inner_data = data['data']
+            if isinstance(inner_data, dict):
+                if 'choices' in inner_data:
+                    return self._extract_content(inner_data)
+                if 'content' in inner_data:
+                    return inner_data['content'].strip()
+        
+        print(f"[AI] 无法从响应中提取内容", file=sys.stderr)
         return ''

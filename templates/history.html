@@ -429,9 +429,19 @@ document.getElementById('show-empty-email').addEventListener('change', e => { sh
 });
 
 document.getElementById('send-selected-btn').addEventListener('click', () => {
-    const emails = [...document.querySelectorAll('.sel:checked')].map(c => c.dataset.email).filter(e => e && e !== '-');
-    if (emails.length) window.location.href = `/send_email_page?emails=${[...new Set(emails)].join(',')}`;
-    else alert('请先选择邮箱');
+    const emails = [...document.querySelectorAll('.sel:checked')]
+        .map(c => c.dataset.email)
+        .filter(e => e && e.trim() && e !== '-' && e !== 'undefined' && e !== 'null');
+    
+    if (emails.length) {
+        // 去重并编码每个邮箱
+        const uniqueEmails = [...new Set(emails)];
+        const encodedEmails = uniqueEmails.map(e => encodeURIComponent(e.trim())).join(',');
+        console.log('发送邮箱列表:', uniqueEmails);
+        window.location.href = `/send_email_page?emails=${encodedEmails}`;
+    } else {
+        alert('请先选择有邮箱的记录');
+    }
 });
 
 document.getElementById('export-excel-btn').addEventListener('click', () => {

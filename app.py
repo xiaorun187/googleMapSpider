@@ -19,7 +19,7 @@ from scraper import extract_business_info
 from contact_scraper import extract_contact_info
 from utils import save_to_csv, save_to_excel
 from email_sender import EmailSender
-from db import save_business_data_to_db, get_history_records, update_send_count
+from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -302,19 +302,62 @@ def start_extraction():
             last_update_time = datetime.now()
         
         def extract_single_city(driver, current_city, product, limit_per_city, extracted_data, is_recovery):
-            """提取单个城市的数据"""
+            """提取单个城市的数据，实时保存到数据库"""
             nonlocal extracted_count
             
             from scraper import should_stop_extraction
             
+            # 统计信息
+            db_stats = {'inserted': 0, 'updated': 0, 'skipped': 0, 'errors': 0}
+            
             for progress, current, business_data, message in extract_business_info(driver, url, limit_per_city, remember_position, current_city, product):
                 # 检查停止标志
                 if should_stop_extraction():
+                    print(f"[DB STATS] 城市 {current_city} 停止时统计: 插入={db_stats['inserted']}, 更新={db_stats['updated']}, 跳过={db_stats['skipped']}, 错误={db_stats['errors']}", file=sys.stderr)
                     return extracted_data, True  # 返回数据和停止标志
                 
                 if business_data:
-                    extracted_data.append(business_data)
-                    extracted_count = len(extracted_data)
+                    # 检查是否是最终结果（包含 results 和 validation 的字典）
+                    if isinstance(business_data, dict) and 'results' in business_data:
+                        # 这是最终汇总结果，不需要再保存（已经实时保存过了）
+                        print(f"[DEBUG] 收到最终汇总结果，跳过（数据已实时保存）", file=sys.stderr)
+                    elif isinstance(business_data, dict) and 'name' in business_data:
+                        # 这是单个商家数据 - 实时保存到数据库
+                        db_result = save_single_business_to_db(business_data)
+                        
+                        if db_result['success']:
+                            if db_result['action'] == 'inserted':
+                                db_stats['inserted'] += 1
+                            elif db_result['action'] == 'updated':
+                                db_stats['updated'] += 1
+                            
+                            # 只有成功保存的数据才添加到内存列表
+                            extracted_data.append(business_data)
+                            extracted_count = len(extracted_data)
+                            
+                            # 发送保存成功通知
+                            socketio.emit('db_save_status', {
+                                'success': True,
+                                'action': db_result['action'],
+                                'name': business_data.get('name'),
+                                'record_id': db_result['record_id'],
+                                'stats': db_stats
+                            })
+                        else:
+                            if db_result['action'] == 'skipped':
+                                db_stats['skipped'] += 1
+                            else:
+                                db_stats['errors'] += 1
+                            
+                            # 发送保存失败通知
+                            socketio.emit('db_save_status', {
+                                'success': False,
+                                'action': db_result['action'],
+                                'name': business_data.get('name'),
+                                'error': db_result['error'],
+                                'stats': db_stats
+                            })
+                            print(f"[WARNING] 保存失败 [{business_data.get('name')}]: {db_result['error']}", file=sys.stderr)
                 
                 # 检测是否是恢复状态
                 if '恢复' in message or 'recover' in message.lower():
@@ -324,11 +367,19 @@ def start_extraction():
                         'message': message
                     })
                 
-                emit_progress_with_stats(progress, current, business_data, message, is_recovery)
+                # 只发送单个商家数据到前端，不发送最终汇总结果
+                emit_business_data = None
+                if business_data and isinstance(business_data, dict) and 'name' in business_data and 'results' not in business_data:
+                    emit_business_data = business_data
+                
+                emit_progress_with_stats(progress, current, emit_business_data, message, is_recovery)
                 
                 # 恢复完成后重置标志
                 if is_recovery and progress > 10:
                     is_recovery = False
+            
+            # 打印城市完成统计
+            print(f"[DB STATS] 城市 {current_city} 完成统计: 插入={db_stats['inserted']}, 更新={db_stats['updated']}, 跳过={db_stats['skipped']}, 错误={db_stats['errors']}", file=sys.stderr)
             
             return extracted_data, False
         
@@ -390,14 +441,14 @@ def start_extraction():
                 if extracted_data:
                     global business_data_store
                     business_data_store = extracted_data
-                    csv_filename = save_to_excel(extracted_data)
                     
-                    # 保存到数据库
-                    try:
-                        save_business_data_to_db(extracted_data)
-                        print(f"已保存 {len(extracted_data)} 条数据到数据库", file=sys.stderr)
-                    except Exception as db_error:
-                        print(f"保存到数据库失败: {db_error}", file=sys.stderr)
+                    # 过滤有效的商家数据（必须有 name 字段）
+                    valid_data = [d for d in extracted_data if isinstance(d, dict) and d.get('name')]
+                    print(f"[DEBUG] 数据汇总: 原始 {len(extracted_data)} 条, 有效 {len(valid_data)} 条", file=sys.stderr)
+                    
+                    # 生成 Excel 文件（数据已在抓取过程中实时保存到数据库）
+                    csv_filename = save_to_excel(valid_data)
+                    print(f"[INFO] 数据已实时保存到数据库，Excel 文件已生成: {csv_filename}", file=sys.stderr)
                     
                     elapsed = (datetime.now() - start_time).total_seconds()
                     final_speed = len(extracted_data) / elapsed if elapsed > 0 else 0
@@ -859,12 +910,13 @@ from utils.ai_email_assistant import AIEmailAssistant
 def _get_ai_config_from_db() -> AIConfiguration:
     """从数据库获取AI配置"""
     try:
-        from db import get_db_connection
+        from db import get_db_connection, release_connection
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT api_endpoint, api_key_encrypted, model FROM ai_configurations ORDER BY id DESC LIMIT 1')
+        cursor.execute('SELECT api_endpoint, api_key_encrypted, model_name FROM ai_configurations ORDER BY id DESC LIMIT 1')
         row = cursor.fetchone()
-        conn.close()
+        cursor.close()
+        release_connection(conn)
         
         if row:
             return AIConfiguration(
@@ -875,13 +927,15 @@ def _get_ai_config_from_db() -> AIConfiguration:
         return AIConfiguration()
     except Exception as e:
         print(f"获取AI配置失败: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return AIConfiguration()
 
 
 def _save_ai_config_to_db(config: AIConfiguration) -> bool:
     """保存AI配置到数据库"""
     try:
-        from db import get_db_connection
+        from db import get_db_connection, release_connection
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -892,20 +946,24 @@ def _save_ai_config_to_db(config: AIConfiguration) -> bool:
         if existing:
             cursor.execute('''
                 UPDATE ai_configurations 
-                SET api_endpoint = ?, api_key_encrypted = ?, model = ?, updated_at = CURRENT_TIMESTAMP
+                SET api_endpoint = ?, api_key_encrypted = ?, model_name = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (config.api_endpoint, config.api_key, config.model, existing[0]))
         else:
             cursor.execute('''
-                INSERT INTO ai_configurations (api_endpoint, api_key_encrypted, model)
-                VALUES (?, ?, ?)
+                INSERT INTO ai_configurations (api_endpoint, api_key_encrypted, model_name, provider)
+                VALUES (?, ?, ?, 'custom')
             ''', (config.api_endpoint, config.api_key, config.model))
         
         conn.commit()
-        conn.close()
+        cursor.close()
+        release_connection(conn)
+        print(f"[AI Config] 保存成功: endpoint={config.api_endpoint}, model={config.model}", file=sys.stderr)
         return True
     except Exception as e:
-        print(f"保存AI配置失败: {e}", file=sys.stderr)
+        print(f"[AI Config ERROR] 保存AI配置失败: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return False
 
 
