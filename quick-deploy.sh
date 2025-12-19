@@ -90,18 +90,40 @@ package_code() {
     
     # 创建临时目录
     TEMP_DIR=$(mktemp -d)
+    log_info "创建临时目录: $TEMP_DIR"
     
     # 复制必要文件
-    cp -r app.py static templates requirements.txt Dockerfile docker-compose.yml docker-entrypoint.sh deploy-status.sh "$TEMP_DIR/" 2>/dev/null || true
+    cp app.py db.py scraper.py requirements.txt Dockerfile docker-compose.yml "$TEMP_DIR/"
     
-    # 创建部署包
+    # 复制目录（如果存在）
+    [ -d "static" ] && cp -r static "$TEMP_DIR/"
+    [ -d "templates" ] && cp -r templates "$TEMP_DIR/"
+    
+    # 复制脚本文件（如果存在）
+    [ -f "docker-entrypoint.sh" ] && cp docker-entrypoint.sh "$TEMP_DIR/"
+    [ -f "deploy-status.sh" ] && cp deploy-status.sh "$TEMP_DIR/"
+    
+    # 检查临时目录内容
+    log_info "临时目录内容: $(ls -la $TEMP_DIR)"
+    
+    # 创建部署包 - 使用绝对路径
     cd "$TEMP_DIR"
-    zip -r "$LOCAL_PATH/$DEPLOY_PACKAGE" . > /dev/null
+    zip -r "$DEPLOY_PACKAGE" . > /dev/null
+    log_info "创建部署包: $DEPLOY_PACKAGE"
+    
+    # 检查zip文件是否创建成功
+    if [ -f "$DEPLOY_PACKAGE" ]; then
+        log_info "部署包大小: $(ls -lh $DEPLOY_PACKAGE | awk '{print $5}')"
+        # 使用cat命令复制部署包到项目目录
+        cat "$DEPLOY_PACKAGE" > "$LOCAL_PATH/$DEPLOY_PACKAGE"
+        log_success "代码打包完成: $DEPLOY_PACKAGE"
+    else
+        log_error "创建部署包失败"
+        exit 1
+    fi
     
     # 清理临时目录
     rm -rf "$TEMP_DIR"
-    
-    log_success "代码打包完成: $DEPLOY_PACKAGE"
 }
 
 # 上传代码到服务器
@@ -176,6 +198,14 @@ cleanup() {
     fi
 }
 
+# 仅清理函数，不自动执行
+manual_cleanup() {
+    if [ -f "$LOCAL_PATH/$DEPLOY_PACKAGE" ]; then
+        rm "$LOCAL_PATH/$DEPLOY_PACKAGE"
+        log_info "已清理本地部署包: $DEPLOY_PACKAGE"
+    fi
+}
+
 # 主函数
 main() {
     local command=${1:-deploy}
@@ -189,7 +219,7 @@ main() {
             deploy_app
             sleep 5  # 等待容器启动
             check_status
-            cleanup
+            manual_cleanup
             log_success "完整部署完成!"
             ;;
         "upload")
@@ -197,7 +227,7 @@ main() {
             check_local_env
             package_code
             upload_code
-            cleanup
+            manual_cleanup
             log_success "代码上传完成!"
             ;;
         "update")
@@ -224,9 +254,6 @@ main() {
             ;;
     esac
 }
-
-# 捕获退出信号，执行清理
-trap cleanup EXIT
 
 # 执行主函数
 main "$@"

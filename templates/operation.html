@@ -183,6 +183,7 @@ let countryCityData = {};
 // 数据持久化功能
 const STORAGE_KEY = 'gmaps_business_data';
 const DOWNLOAD_KEY = 'gmaps_download_file';
+const FORM_STATE_KEY = 'gmaps_form_state';
 
 function saveDataToStorage() {
     try {
@@ -212,12 +213,78 @@ function clearStoredData() {
     localStorage.removeItem(DOWNLOAD_KEY);
 }
 
+// 表单状态持久化
+function saveFormState() {
+    try {
+        const formState = {
+            country: document.getElementById('country').value,
+            citySelect: document.getElementById('city-select').value,
+            city: document.getElementById('city').value,
+            product: document.getElementById('product').value,
+            limit: document.getElementById('limit').value,
+            proxy: document.getElementById('proxy').value,
+            rememberPosition: document.getElementById('remember_position').checked
+        };
+        localStorage.setItem(FORM_STATE_KEY, JSON.stringify(formState));
+    } catch (e) { console.warn('保存表单状态失败:', e); }
+}
+
+function loadFormState() {
+    try {
+        const saved = localStorage.getItem(FORM_STATE_KEY);
+        if (saved) {
+            const formState = JSON.parse(saved);
+            
+            // 恢复国家选择
+            if (formState.country) {
+                document.getElementById('country').value = formState.country;
+                populateCitySelect(formState.country);
+                
+                // 恢复城市下拉选择
+                if (formState.citySelect) {
+                    document.getElementById('city-select').value = formState.citySelect;
+                }
+            }
+            
+            // 恢复其他字段
+            if (formState.city) document.getElementById('city').value = formState.city;
+            if (formState.product) document.getElementById('product').value = formState.product;
+            if (formState.limit) document.getElementById('limit').value = formState.limit;
+            if (formState.proxy) document.getElementById('proxy').value = formState.proxy;
+            if (formState.rememberPosition !== undefined) {
+                document.getElementById('remember_position').checked = formState.rememberPosition;
+            }
+            
+            // 更新国家爬取提示
+            updateCountryScrapeHint();
+        }
+    } catch (e) { console.warn('加载表单状态失败:', e); }
+}
+
+// 监听表单变化自动保存
+function setupFormAutoSave() {
+    const formElements = ['country', 'city-select', 'city', 'product', 'limit', 'proxy', 'remember_position'];
+    formElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', saveFormState);
+            if (el.type === 'text' || el.type === 'number') {
+                el.addEventListener('input', saveFormState);
+            }
+        }
+    });
+}
+
 async function loadCountryCityData() {
     try {
         const response = await fetch('/api/countries');
         if (response.ok) { countryCityData = await response.json(); populateCountrySelect(); }
         else { loadLocalCountryCityData(); }
     } catch (e) { loadLocalCountryCityData(); }
+    
+    // 国家数据加载完成后恢复表单状态
+    loadFormState();
+    setupFormAutoSave();
 }
 
 function loadLocalCountryCityData() {

@@ -81,7 +81,7 @@
         <div class="card-header">
             <div class="search-row">
                 <input type="text" id="search-query" placeholder="搜索名称或邮箱...">
-                <label><input type="checkbox" id="show-empty-email"> 显示空邮箱</label>
+                <label><input type="checkbox" id="show-empty-email" checked> 显示空邮箱</label>
                 <button class="btn btn-primary" id="search-btn">🔍 搜索</button>
             </div>
             <div class="search-row">
@@ -158,7 +158,7 @@
     .confirm-dialog p { margin-bottom: 20px; color: #4a5568; }
 </style>
 <script>
-let currentPage = 1, pageSize = 10, showEmptyEmail = false;
+let currentPage = 1, pageSize = 10, showEmptyEmail = true;
 const cols = { facebook: false, twitter: false, instagram: false, linkedin: false, whatsapp: false, youtube: false };
 
 function fmt(v) { return v && v.startsWith('http') ? `<a href="${v}" target="_blank">${v.slice(0,30)}...</a>` : (v || '-'); }
