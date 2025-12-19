@@ -576,7 +576,7 @@ def extract_contacts():
                         'message': message
                     })
 
-                # 联系方式提取完成后保存到 Excel 和数据库
+                # 联系方式提取完成后保存到 Excel
                 csv_filename = save_to_excel(business_data_store)
                 socketio.emit('contact_update', {
                     'progress': 100,
@@ -585,13 +585,9 @@ def extract_contacts():
                     'data': business_data_store  # 返回完整数据，确保界面与Excel一致
                 })
 
-                # 保存到数据库
-                # save_business_data_to_db(business_data_store)
-                # socketio.emit('contact_update', {
-                #     'progress': 100,
-                #     'csv_file': csv_filename,
-                #     'message': '联系方式提取完成并已保存到数据库'
-                # })
+                # 注意：由于在contact_scraper.py中已经实时保存到数据库，这里不再重复保存
+                # 保留此注释是为了说明数据已经在提取过程中实时保存了
+                print("[INFO] 联系方式提取完成，数据已在提取过程中实时保存到数据库", file=sys.stderr)
 
             except Exception as e:
                 print(f"联系方式提取任务发生异常: {e}", file=sys.stderr)
@@ -670,9 +666,12 @@ def get_history():
     size = int(request.args.get('size', 10))
     query = request.args.get('query', '')
     show_empty_email = request.args.get('show_empty_email', 'false').lower() == 'true'  # 获取筛选参数，默认为 false
+    print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', show_empty_email={show_empty_email}", file=sys.stderr)
     try:
-        records, total = get_history_records(page, size, query,show_empty_email)
-        total_pages = (total + size - 1) // size
+        result = get_history_records(page, size, query, show_empty_email)
+        records = result['records']
+        total = result['total']
+        total_pages = result['total_pages']
         return jsonify({
             "status": "success",
             "records": records,

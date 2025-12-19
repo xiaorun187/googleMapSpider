@@ -421,6 +421,7 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
             conditions.append("(name LIKE ? OR email LIKE ? OR city LIKE ? OR product LIKE ?)")
             search_param = f"%{search}%"
             params.extend([search_param, search_param, search_param, search_param])
+            print(f"[DEBUG] Search conditions: {conditions}, params: {params}", file=sys.stderr)
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         

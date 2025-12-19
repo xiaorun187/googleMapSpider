@@ -239,35 +239,37 @@ def extract_contact_info(driver, business_data_list):
                 yield progress, name, business, f"未找到邮箱，开始从facebook提取 {name} "
                 business['emails']=extract_single_facebook_email_info(driver,business.get('facebook'))
                 yield progress, name, business, f"从facebook提取邮箱 {business['emails']} "
-            # 使用批量处理器保存数据
-            print(f"准备保存 {name} 的完整数据: {business}")
-            _batch_processor.add(business)
+                
+                # 从Facebook提取邮箱后立即保存到数据库
+                try:
+                    result = save_single_business_to_db(business)
+                    if result['success']:
+                        if result['action'] == 'inserted':
+                            print(f"[DB] 新增记录 [{name}] ID={result['record_id']}")
+                        elif result['action'] == 'updated':
+                            print(f"[DB] 更新记录 [{name}] ID={result['record_id']}")
+                    else:
+                        print(f"[DB ERROR] 保存失败 [{name}]: {result['error']}")
+                except Exception as e:
+                    print(f"[DB ERROR] 保存异常 [{name}]: {e}")
             
-            # 检查是否需要批量保存
-            if _batch_processor.should_flush():
-                batch_data = _batch_processor.flush()
-                if batch_data:
-                    # 去重处理
-                    unique_data = _deduplicator.deduplicate(batch_data)
-                    
-                    # 尝试保存数据到数据库
-                    max_retries = 3
-                    for attempt in range(max_retries):
-                        try:
-                            save_business_data_to_db(unique_data)
-                            print(f"已批量保存 {len(unique_data)} 条数据到数据库")
-                            break
-                        except Exception as db_error:
-                            print(f"批量保存数据失败 (尝试 {attempt + 1}/{max_retries}): {db_error}", file=sys.stderr)
-                            if attempt < max_retries - 1:
-                                time.sleep(1)
-                            else:
-                                print(f"批量保存数据最终失败", file=sys.stderr)
-                                _logger.log_error(db_error, {'batch_size': len(unique_data)})
-
-            _logger.log_extraction(website, 1, 0)
             print(f"成功提取 {name} 的联系方式: {business}")
-            yield progress, name, business, f"成功提取 {name} 的联系方式"
+            _logger.log_extraction(website, 1, 0)
+            
+            # 立即保存到数据库
+            try:
+                result = save_single_business_to_db(business)
+                if result['success']:
+                    if result['action'] == 'inserted':
+                        print(f"[DB] 新增记录 [{name}] ID={result['record_id']}")
+                    elif result['action'] == 'updated':
+                        print(f"[DB] 更新记录 [{name}] ID={result['record_id']}")
+                else:
+                    print(f"[DB ERROR] 保存失败 [{name}]: {result['error']}")
+            except Exception as e:
+                print(f"[DB ERROR] 保存异常 [{name}]: {e}")
+            
+            yield progress, name, business, f"成功提取 {name} 的联系方式并已保存到数据库"
 
         except Exception as e:
             _logger.log_error(e, {'name': name, 'website': website})

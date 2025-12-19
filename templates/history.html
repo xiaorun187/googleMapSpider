@@ -158,8 +158,9 @@
     .confirm-dialog p { margin-bottom: 20px; color: #4a5568; }
 </style>
 <script>
-let currentPage = 1, pageSize = 10, showEmptyEmail = true;
+let currentPage = 1, pageSize = 50, showEmptyEmail = true;
 const cols = { facebook: false, twitter: false, instagram: false, linkedin: false, whatsapp: false, youtube: false };
+let isLoading = false;
 
 function fmt(v) { return v && v.startsWith('http') ? `<a href="${v}" target="_blank">${v.slice(0,30)}...</a>` : (v || '-'); }
 function fmtDate(d) { if (!d) return '-'; const dt = new Date(d); return isNaN(dt) ? '-' : dt.toLocaleString('zh-CN'); }
@@ -234,10 +235,10 @@ function renderPagination(totalPages, total) {
         <button ${currentPage>=tp?'disabled':''} onclick="go(${currentPage+1})">下一页</button>
         <button ${currentPage>=tp?'disabled':''} onclick="go(${tp})">末页</button>
         <select class="page-size-select" onchange="changePageSize(this.value)">
-            <option value="10" ${pageSize===10?'selected':''}>10条/页</option>
             <option value="20" ${pageSize===20?'selected':''}>20条/页</option>
             <option value="50" ${pageSize===50?'selected':''}>50条/页</option>
             <option value="100" ${pageSize===100?'selected':''}>100条/页</option>
+            <option value="200" ${pageSize===200?'selected':''}>200条/页</option>
         </select>
         <span class="page-info">跳转到</span>
         <input type="number" class="goto-input" id="goto-page" min="1" max="${tp}" value="${currentPage}">
@@ -258,6 +259,17 @@ window.gotoPage = function() {
         go(page);
     }
 };
+
+// Initialize page with all records
+document.addEventListener('DOMContentLoaded', function() {
+    // Ensure the checkbox state matches the variable
+    document.getElementById('show-empty-email').checked = showEmptyEmail;
+    
+    // Load initial data
+    load();
+});
+
+load();
 
 // 模态框操作
 function openModal(title = '编辑记录') {
@@ -401,6 +413,13 @@ async function confirmDelete() {
 let totalRecords = 0;
 
 function load() {
+    if (isLoading) return;
+    isLoading = true;
+    
+    // Show loading state
+    const t = document.getElementById('history-table');
+    t.innerHTML = '<thead><tr><th colspan="17" style="text-align: center; padding: 40px; color: #94a3b8;">加载中...</td></tr></thead><tbody></tbody>';
+    
     const q = document.getElementById('search-query').value;
     fetch(`/get_history?page=${currentPage}&size=${pageSize}&query=${encodeURIComponent(q)}&show_empty_email=${showEmptyEmail}`)
         .then(r => r.json())
@@ -416,6 +435,9 @@ function load() {
         .catch(e => {
             console.error('请求失败:', e);
             render([], 1, 0);
+        })
+        .finally(() => {
+            isLoading = false;
         });
 }
 
