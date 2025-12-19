@@ -72,6 +72,7 @@ def extract_business_info(proxy, facebook_url, business_id):
         driver.quit()
 
 if __name__ == '__main__':
-    # 示例调用
+    # 示例调用 - 请替换为实际的Facebook URL
     # 假设您已经配置好了数据库连接和 chrome_driver
-    scraper_facebook_email('http://localhost:10809')
+    # scraper_facebook_email('ACTUAL_FACEBOOK_URL_HERE')
+    pass
