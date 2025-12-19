@@ -12,9 +12,6 @@ from typing import Optional
 DB_FILE = "business.db"
 
 
-# ============================================================================
-# 数据验证结果类 (Requirements 4.1, 4.2)
-# ============================================================================
 @dataclass
 class ValidationResult:
     """验证结果数据类"""
@@ -24,16 +21,12 @@ class ValidationResult:
 
 
 def generate_unique_id() -> str:
-    """
-    生成 UUID 格式的唯一标识符
-    
-    Returns:
-        str: UUID 字符串
-    """
+    """生成 UUID 格式的唯一标识符"""
     return str(uuid.uuid4())
 
+
 # ============================================================================
-# 连接池管理 (Requirements 4.5)
+# 连接池管理
 # ============================================================================
 MAX_CONNECTIONS = 5
 _connection_pool = Queue(maxsize=MAX_CONNECTIONS)
@@ -50,8 +43,8 @@ def _init_connection_pool():
         for _ in range(MAX_CONNECTIONS):
             try:
                 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-                conn.execute("PRAGMA journal_mode=WAL")  # 启用WAL模式提高并发性能
-                conn.execute("PRAGMA synchronous=NORMAL")  # 平衡性能和安全
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
                 _connection_pool.put(conn)
             except Error as e:
                 print(f"初始化连接池失败: {e}", file=sys.stderr)
@@ -62,18 +55,14 @@ def get_db_connection():
     """从连接池获取数据库连接"""
     _init_connection_pool()
     try:
-        # 尝试从池中获取连接，超时5秒
         conn = _connection_pool.get(timeout=5)
         return conn
     except Exception:
-        # 如果池为空，创建新连接
         try:
             conn = sqlite3.connect(DB_FILE, check_same_thread=False)
             return conn
         except Error as e:
             print(f"Error connecting to database: {e}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
             return None
 
 
@@ -110,11 +99,11 @@ def init_database():
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # 创建 business_records 表（基于 name + website 唯一性判断）
+        # 创建 business_records 表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS business_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                unique_id TEXT NOT NULL,
+                unique_id TEXT,
                 name TEXT,
                 website TEXT,
                 email TEXT,
@@ -133,39 +122,19 @@ def init_database():
             )
         """)
         
-        # 创建 ai_configurations 表 (Requirements 12.6)
+        # 创建 ai_configurations 表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ai_configurations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                provider TEXT NOT NULL DEFAULT 'gemini',
+                provider TEXT NOT NULL DEFAULT 'custom',
                 api_endpoint TEXT,
                 api_key_encrypted TEXT,
-                model_name TEXT DEFAULT 'gemini-1.5-flash',
+                model_name TEXT,
                 temperature REAL DEFAULT 0.7,
                 max_tokens INTEGER DEFAULT 1024,
                 is_active INTEGER DEFAULT 1,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # 添加 api_endpoint 字段到现有表（如果不存在）
-        try:
-            cursor.execute("ALTER TABLE ai_configurations ADD COLUMN api_endpoint TEXT")
-        except Error:
-            pass  # 列已存在
-        
-        # 创建 country_city_mappings 表 (Requirements 10.3)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS country_city_mappings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                country_code TEXT NOT NULL,
-                country_name TEXT NOT NULL,
-                city_name TEXT NOT NULL,
-                is_active INTEGER DEFAULT 1,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(country_code, city_name)
             )
         """)
         
@@ -178,51 +147,10 @@ def init_database():
             )
         """)
         
-        # 添加 city 字段到现有表（如果不存在）
-        try:
-            cursor.execute("ALTER TABLE business_records ADD COLUMN city TEXT")
-        except Error:
-            pass  # 列已存在
-        
-        # 添加 product 字段到现有表（如果不存在）
-        try:
-            cursor.execute("ALTER TABLE business_records ADD COLUMN product TEXT")
-        except Error:
-            pass  # 列已存在
-        
-        # 添加 unique_id 字段到现有表（如果不存在）
-        try:
-            cursor.execute("ALTER TABLE business_records ADD COLUMN unique_id TEXT")
-        except Error:
-            pass  # 列已存在
-        
-        # 为现有记录生成 unique_id（迁移逻辑）
-        cursor.execute("SELECT id FROM business_records WHERE unique_id IS NULL OR unique_id = ''")
-        records_without_uid = cursor.fetchall()
-        for (record_id,) in records_without_uid:
-            cursor.execute(
-                "UPDATE business_records SET unique_id = ? WHERE id = ?",
-                (generate_unique_id(), record_id)
-            )
-        
-        # 移除旧的 email 唯一索引（如果存在）
-        try:
-            cursor.execute("DROP INDEX IF EXISTS idx_business_email_unique")
-        except Error:
-            pass
-        
-        # 创建索引以提高查询性能
+        # 创建索引
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_email ON business_records(email)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_city ON business_records(city)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_product ON business_records(product)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_updated ON business_records(updated_at)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_country_city ON country_city_mappings(country_code)")
-        
-        # 创建 unique_id 唯一索引 (Requirements 3.3)
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_id ON business_records(unique_id)")
-        
-        # 创建 (name, website) 复合唯一索引 (Requirements 3.1)
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_name_website ON business_records(name, website)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_name_website ON business_records(name, website)")
         
         connection.commit()
         print("数据库初始化完成", file=sys.stderr)
@@ -241,41 +169,18 @@ def init_database():
 init_database()
 
 
-# ============================================================================
-# 数据唯一性验证函数 (Requirements 4.1, 4.2)
-# ============================================================================
-
-def check_duplicate_exists(name: str, website: str, exclude_id: int = None) -> Optional[dict]:
-    """
-    检查是否存在相同 name + website 的记录
-    
-    Args:
-        name: 商家名称
-        website: 商家网站
-        exclude_id: 排除的记录ID（用于更新操作）
-        
-    Returns:
-        Optional[dict]: 存在重复时返回现有记录，否则返回 None
-    """
+def check_duplicate_exists(name: str, website: str) -> Optional[dict]:
+    """检查是否存在相同 name + website 的记录"""
     connection = None
     cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
-        
-        if exclude_id:
-            cursor.execute("""
-                SELECT id, unique_id, name, website, email
-                FROM business_records
-                WHERE name = ? AND website = ? AND id != ?
-            """, (name, website, exclude_id))
-        else:
-            cursor.execute("""
-                SELECT id, unique_id, name, website, email
-                FROM business_records
-                WHERE name = ? AND website = ?
-            """, (name, website))
-        
+        cursor.execute("""
+            SELECT id, unique_id, name, website, email
+            FROM business_records
+            WHERE name = ? AND website = ?
+        """, (name, website))
         row = cursor.fetchone()
         if row:
             return {
@@ -292,40 +197,8 @@ def check_duplicate_exists(name: str, website: str, exclude_id: int = None) -> O
         release_connection(connection)
 
 
-def validate_uniqueness(name: str, website: str, exclude_id: int = None) -> ValidationResult:
-    """
-    验证 name + website 组合的唯一性
-    
-    Args:
-        name: 商家名称
-        website: 商家网站
-        exclude_id: 排除的记录ID（用于更新操作）
-        
-    Returns:
-        ValidationResult: 验证结果
-    """
-    existing = check_duplicate_exists(name, website, exclude_id)
-    
-    if existing:
-        return ValidationResult(
-            is_valid=False,
-            error_message=f"Record with name '{name}' and website '{website}' already exists (ID: {existing['id']})",
-            existing_record=existing
-        )
-    
-    return ValidationResult(is_valid=True)
-
-
-def validate_business_data(business: dict) -> tuple[bool, str]:
-    """
-    验证单条商家数据的有效性
-    
-    Args:
-        business: 商家数据字典
-        
-    Returns:
-        tuple: (是否有效, 错误信息)
-    """
+def validate_business_data(business: dict) -> tuple:
+    """验证单条商家数据的有效性"""
     if not isinstance(business, dict):
         return False, "数据格式无效：不是字典类型"
     
@@ -333,7 +206,6 @@ def validate_business_data(business: dict) -> tuple[bool, str]:
     if not name or not isinstance(name, str) or not name.strip():
         return False, "商家名称为空或无效"
     
-    # 检查是否包含无效的嵌套结构
     if 'results' in business or 'validation' in business:
         return False, "数据包含无效的嵌套结构"
     
@@ -344,21 +216,15 @@ def save_single_business_to_db(business: dict) -> dict:
     """
     实时保存单条商家数据到数据库
     
-    Features:
-    - 单条数据验证
-    - 基于 name + website 的唯一性判断
-    - 事务完整性保证
-    - 详细的日志记录
-    
     Args:
         business: 单条商家数据字典
         
     Returns:
-        dict: 包含 success, action (inserted/updated/skipped), error 的结果
+        dict: 包含 success, action, error, record_id 的结果
     """
     result = {
         'success': False,
-        'action': None,  # 'inserted', 'updated', 'skipped'
+        'action': None,
         'error': None,
         'record_id': None,
         'name': business.get('name', 'Unknown')
@@ -379,7 +245,7 @@ def save_single_business_to_db(business: dict) -> dict:
         connection = get_db_connection()
         if not connection:
             result['error'] = "无法获取数据库连接"
-            print(f"[DB ERROR] 无法获取数据库连接", file=sys.stderr)
+            print("[DB ERROR] 无法获取数据库连接", file=sys.stderr)
             return result
         
         cursor = connection.cursor()
@@ -397,13 +263,13 @@ def save_single_business_to_db(business: dict) -> dict:
         youtube = business.get('youtube', '') or ''
         city = business.get('city', '') or ''
         product = business.get('product', '') or ''
+        email_value = emails[0] if emails else None
         
         # 检查数据库中是否存在重复
         existing = check_duplicate_exists(name, website)
         
         if existing:
             # 更新现有记录
-            email_value = emails[0] if emails else None
             cursor.execute("""
                 UPDATE business_records 
                 SET email = COALESCE(?, email),
@@ -429,8 +295,6 @@ def save_single_business_to_db(business: dict) -> dict:
         else:
             # 插入新记录
             unique_id = generate_unique_id()
-            email_value = emails[0] if emails else None
-            
             cursor.execute("""
                 INSERT INTO business_records 
                 (unique_id, name, website, email, phones, facebook, twitter, 
@@ -453,14 +317,6 @@ def save_single_business_to_db(business: dict) -> dict:
                 pass
         result['error'] = str(e)
         print(f"[DB ERROR] 保存失败 [{result['name']}]: {e}", file=sys.stderr)
-    except Exception as e:
-        if connection:
-            try:
-                connection.rollback()
-            except Exception:
-                pass
-        result['error'] = str(e)
-        print(f"[DB ERROR] 未知错误 [{result['name']}]: {e}", file=sys.stderr)
     finally:
         if cursor:
             try:
@@ -472,449 +328,384 @@ def save_single_business_to_db(business: dict) -> dict:
     return result
 
 
-def save_business_data_to_db(business_data):
+def save_business_data_to_db(data: list, product: str = '', city: str = '') -> dict:
     """
-    Save business data to SQLite database with name+website uniqueness
+    批量保存商家数据到数据库
     
-    Features:
-    - 基于 name + website 的唯一性判断 (Requirements 1.1, 1.2, 1.3)
-    - 使用事务批量处理 (Requirements 4.2)
-    - 错误回滚和单条重试 (Requirements 4.3)
-    - 自动生成 unique_id (Requirements 2.1)
-    - 支持 city 字段 (Requirements 9.3)
-    
+    Args:
+        data: 商家数据列表
+        product: 产品/关键词
+        city: 城市名称
+        
     Returns:
-        dict: 包含 success, inserted_count, skipped_count, errors 的结果
+        dict: 包含 inserted, updated, skipped, errors 的统计结果
+    """
+    stats = {
+        'inserted': 0,
+        'updated': 0,
+        'skipped': 0,
+        'errors': 0,
+        'total': len(data) if data else 0
+    }
+    
+    if not data or not isinstance(data, list):
+        print("[DB] 没有数据需要保存", file=sys.stderr)
+        return stats
+    
+    for business in data:
+        if not isinstance(business, dict):
+            stats['skipped'] += 1
+            continue
+        
+        # 添加 city 和 product 信息
+        if city and not business.get('city'):
+            business['city'] = city
+        if product and not business.get('product'):
+            business['product'] = product
+        
+        result = save_single_business_to_db(business)
+        
+        if result['success']:
+            if result['action'] == 'inserted':
+                stats['inserted'] += 1
+            elif result['action'] == 'updated':
+                stats['updated'] += 1
+        elif result['action'] == 'skipped':
+            stats['skipped'] += 1
+        else:
+            stats['errors'] += 1
+    
+    print(f"[DB] 批量保存完成: 插入={stats['inserted']}, 更新={stats['updated']}, 跳过={stats['skipped']}, 错误={stats['errors']}", file=sys.stderr)
+    return stats
+
+
+def get_history_records(page: int = 1, per_page: int = 20, search: str = '', 
+                        show_empty_email: bool = True) -> dict:
+    """
+    获取历史记录（分页）
+    
+    Args:
+        page: 页码
+        per_page: 每页数量
+        search: 搜索关键词
+        show_empty_email: 是否显示空邮箱记录
+        
+    Returns:
+        dict: 包含 records, total, page, per_page, total_pages
     """
     connection = None
     cursor = None
     result = {
-        'success': True,
-        'inserted_count': 0,
-        'skipped_count': 0,
-        'updated_count': 0,
-        'errors': []
+        'records': [],
+        'total': 0,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': 0
     }
     
     try:
         connection = get_db_connection()
-        connection.execute("BEGIN TRANSACTION")
-        cursor = connection.cursor()
-
-        # 用于跟踪本批次中的 name+website 组合
-        seen_combinations = set()
+        if not connection:
+            return result
         
-        for business in business_data:
-            name = business.get('name', '') or ''
-            website = business.get('website', '') or ''
-            emails = business.get('emails', []) if business.get('emails') else []
-            phones = ', '.join(business.get('phones', [])) if business.get('phones') else ''
-            facebook = business.get('facebook', '')
-            twitter = business.get('twitter', '')
-            instagram = business.get('instagram', '')
-            linkedin = business.get('linkedin', '')
-            whatsapp = business.get('whatsapp', '')
-            youtube = business.get('youtube', '')
-            city = business.get('city', '')
-            product = business.get('product', '')
-            
-            # 创建 name+website 组合键
-            combination_key = (name, website)
-            
-            # 检查本批次内是否已有相同组合
-            if combination_key in seen_combinations:
-                result['skipped_count'] += 1
-                continue
-            seen_combinations.add(combination_key)
-            
-            # 检查数据库中是否存在重复
-            existing = check_duplicate_exists(name, website)
-            
-            if existing:
-                # 更新现有记录
-                email_value = emails[0] if emails else None
-                cursor.execute("""
-                    UPDATE business_records 
-                    SET email = COALESCE(?, email),
-                        phones = COALESCE(NULLIF(?, ''), phones),
-                        facebook = COALESCE(NULLIF(?, ''), facebook),
-                        twitter = COALESCE(NULLIF(?, ''), twitter),
-                        instagram = COALESCE(NULLIF(?, ''), instagram),
-                        linkedin = COALESCE(NULLIF(?, ''), linkedin),
-                        whatsapp = COALESCE(NULLIF(?, ''), whatsapp),
-                        youtube = COALESCE(NULLIF(?, ''), youtube),
-                        city = COALESCE(NULLIF(?, ''), city),
-                        product = COALESCE(NULLIF(?, ''), product),
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (email_value, phones, facebook, twitter, instagram, 
-                      linkedin, whatsapp, youtube, city, product, existing['id']))
-                result['updated_count'] += 1
-            else:
-                # 插入新记录
-                unique_id = generate_unique_id()
-                email_value = emails[0] if emails else None
-                
-                cursor.execute("""
-                    INSERT INTO business_records 
-                    (unique_id, name, website, email, phones, facebook, twitter, 
-                     instagram, linkedin, whatsapp, youtube, city, product, send_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                """, (unique_id, name, website, email_value, phones, facebook, 
-                      twitter, instagram, linkedin, whatsapp, youtube, city, product))
-                result['inserted_count'] += 1
-
-        connection.commit()
-        print(f"Successfully processed {len(business_data)} records: "
-              f"{result['inserted_count']} inserted, {result['updated_count']} updated, "
-              f"{result['skipped_count']} skipped", file=sys.stderr)
-
-    except Error as e:
-        if connection:
-            connection.rollback()
-        result['success'] = False
-        result['errors'].append(str(e))
-        print(f"Failed to save business data: {e}", file=sys.stderr)
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-    
-    return result
-
-
-def save_business_data_batch(business_data_list):
-    """
-    批量保存商家数据到数据库，基于 name+website 唯一性判断
-    
-    Features:
-    - 基于 name + website 的唯一性判断 (Requirements 1.1, 1.2, 1.3)
-    - 使用事务批量处理 (Requirements 4.2)
-    - 自动生成 unique_id (Requirements 2.1)
-    - 支持 city 字段 (Requirements 9.3)
-    
-    Returns:
-        dict: 包含 success, inserted_count, skipped_count, errors 的结果
-    """
-    if not business_data_list:
-        return {'success': True, 'inserted_count': 0, 'skipped_count': 0, 'updated_count': 0, 'errors': []}
-    
-    connection = None
-    cursor = None
-    result = {
-        'success': True,
-        'inserted_count': 0,
-        'skipped_count': 0,
-        'updated_count': 0,
-        'errors': []
-    }
-    
-    try:
-        connection = get_db_connection()
-        connection.execute("BEGIN TRANSACTION")
         cursor = connection.cursor()
         
-        # 用于跟踪本批次中的 name+website 组合
-        seen_combinations = set()
-        
-        for business_data in business_data_list:
-            name = business_data.get('name', '') or ''
-            website = business_data.get('website', '') or ''
-            emails = business_data.get('emails', []) if business_data.get('emails') else []
-            phones = ','.join(business_data.get('phones', [])) if business_data.get('phones') else ''
-            facebook = business_data.get('facebook', '')
-            twitter = business_data.get('twitter', '')
-            instagram = business_data.get('instagram', '')
-            linkedin = business_data.get('linkedin', '')
-            whatsapp = business_data.get('whatsapp', '')
-            youtube = business_data.get('youtube', '')
-            city = business_data.get('city', '')
-            product = business_data.get('product', '')
-            
-            # 创建 name+website 组合键
-            combination_key = (name, website)
-            
-            # 检查本批次内是否已有相同组合
-            if combination_key in seen_combinations:
-                result['skipped_count'] += 1
-                continue
-            seen_combinations.add(combination_key)
-            
-            # 检查数据库中是否存在重复
-            existing = check_duplicate_exists(name, website)
-            
-            if existing:
-                # 更新现有记录
-                email_value = emails[0] if emails else None
-                cursor.execute("""
-                    UPDATE business_records 
-                    SET email = COALESCE(?, email),
-                        phones = COALESCE(NULLIF(?, ''), phones),
-                        facebook = COALESCE(NULLIF(?, ''), facebook),
-                        twitter = COALESCE(NULLIF(?, ''), twitter),
-                        instagram = COALESCE(NULLIF(?, ''), instagram),
-                        linkedin = COALESCE(NULLIF(?, ''), linkedin),
-                        whatsapp = COALESCE(NULLIF(?, ''), whatsapp),
-                        youtube = COALESCE(NULLIF(?, ''), youtube),
-                        city = COALESCE(NULLIF(?, ''), city),
-                        product = COALESCE(NULLIF(?, ''), product),
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (email_value, phones, facebook, twitter, instagram, 
-                      linkedin, whatsapp, youtube, city, product, existing['id']))
-                result['updated_count'] += 1
-            else:
-                # 插入新记录
-                unique_id = generate_unique_id()
-                email_value = emails[0] if emails else None
-                
-                cursor.execute("""
-                    INSERT INTO business_records 
-                    (unique_id, name, website, email, phones, facebook, twitter, 
-                     instagram, linkedin, whatsapp, youtube, city, product, send_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                """, (unique_id, name, website, email_value, phones, facebook, 
-                      twitter, instagram, linkedin, whatsapp, youtube, city, product))
-                result['inserted_count'] += 1
-        
-        connection.commit()
-        print(f"Successfully processed {len(business_data_list)} records in batch: "
-              f"{result['inserted_count']} inserted, {result['updated_count']} updated, "
-              f"{result['skipped_count']} skipped", file=sys.stderr)
-    except Error as e:
-        if connection:
-            connection.rollback()
-        result['success'] = False
-        result['errors'].append(str(e))
-        print(f"Failed to save business data in batch: {e}", file=sys.stderr)
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-    
-    return result
-
-
-def get_history_records(page, size, query='', show_empty_email=False, city_filter=None):
-    """
-    Query history records with search, pagination, and optional filtering
-    
-    Features:
-    - 支持 city 字段查询 (Requirements 9.3)
-    - 分页查询优化
-    """
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        offset = (page - 1) * size
-
-        # Base SQL query with unique_id, city and product fields
-        sql = """
-            SELECT id, unique_id, name, website, email, phones, facebook, twitter, instagram, 
-                   linkedin, whatsapp, youtube, city, product, send_count, updated_at, created_at
-            FROM business_records
-            WHERE 1=1
-        """
-        count_sql = """
-            SELECT COUNT(*) as total
-            FROM business_records
-            WHERE 1=1
-        """
+        # 构建查询条件
+        conditions = []
         params = []
-        count_params = []
-
-        # Add email filter condition
-        if not show_empty_email:
-            sql += " AND (email IS NOT NULL AND email != '')"
-            count_sql += " AND (email IS NOT NULL AND email != '')"
-
-        # Add search condition
-        if query:
-            sql += " AND (name LIKE ? OR email LIKE ? OR city LIKE ? OR product LIKE ?)"
-            count_sql += " AND (name LIKE ? OR email LIKE ? OR city LIKE ? OR product LIKE ?)"
-            query_param = f"%{query}%"
-            params.extend([query_param, query_param, query_param, query_param])
-            count_params.extend([query_param, query_param, query_param, query_param])
-
-        # Add city filter
-        if city_filter:
-            sql += " AND city = ?"
-            count_sql += " AND city = ?"
-            params.append(city_filter)
-            count_params.append(city_filter)
-
-        # Add sorting and pagination
-        sql += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
-        params.extend([size, offset])
-
-        # Execute query
-        cursor.execute(sql, params)
-        columns = [desc[0] for desc in cursor.description]
-        records = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-        # Query total count
-        cursor.execute(count_sql, count_params)
-        total = cursor.fetchone()[0]
-
-        return records, total
-
-    except Exception as e:
-        print(f"Failed to query history records: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        return [], 0
-
-    finally:
-        if cursor:
-            try:
-                cursor.close()
-            except Exception:
-                pass
-        release_connection(connection)
-
-
-def update_send_count(emails):
-    """Update send count for specified emails"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        for email in emails:
-            cursor.execute("""
-                UPDATE business_records 
-                SET send_count = send_count + 1,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE email = ?
-            """, (email,))
-
-        connection.commit()
-        print(f"Successfully updated send count for {len(emails)} emails", file=sys.stderr)
-
-    except Error as e:
-        print(f"Failed to update send count: {e}", file=sys.stderr)
-        raise
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-def get_last_position(url):
-    """Get last extraction position for a given URL"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        cursor.execute("SELECT last_position FROM last_extraction_positions WHERE url = ?", (url,))
-        result = cursor.fetchone()
-        return result[0] if result else None
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-def save_last_position(url, last_position):
-    """Save last extraction position for a given URL"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        cursor.execute("""
-            INSERT OR REPLACE INTO last_extraction_positions (url, last_position)
-            VALUES (?, ?)
-        """, (url, last_position))
-
-        connection.commit()
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-def get_facebook_non_email():
-    """Get records with Facebook but no email"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        cursor.execute("SELECT id, facebook FROM business_records WHERE facebook IS NOT NULL AND email IS NULL")
-        result = cursor.fetchall()
-        return result
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-def update_business_email(business_id, email):
-    """Update email for a specific business record by ID"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        cursor.execute("UPDATE business_records SET email = ? WHERE id = ?", (email, business_id))
-        connection.commit()
-        return True
-    except sqlite3.Error as err:
-        print(f"Failed to update email in database: {err}")
-        if "UNIQUE constraint failed" in str(err):
-            print(f"Duplicate email detected for record {business_id}, keeping existing record")
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-def delete_business_email(business_id):
-    """Delete a business record by ID"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        cursor.execute("DELETE FROM business_records WHERE id = ?", (business_id,))
-        connection.commit()
-        return True
-    except sqlite3.Error as err:
-        print(f"Failed to delete database record: {err}")
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-# ============================================================================
-# AI 配置相关函数 (Requirements 12.6)
-# ============================================================================
-
-def get_ai_config():
-    """获取 AI 配置"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
         
+        if not show_empty_email:
+            conditions.append("email IS NOT NULL AND email != ''")
+        
+        if search:
+            conditions.append("(name LIKE ? OR email LIKE ? OR city LIKE ? OR product LIKE ?)")
+            search_param = f"%{search}%"
+            params.extend([search_param, search_param, search_param, search_param])
+        
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+        
+        # 获取总数
+        count_sql = f"SELECT COUNT(*) FROM business_records{where_clause}"
+        cursor.execute(count_sql, params)
+        total = cursor.fetchone()[0]
+        result['total'] = total
+        result['total_pages'] = (total + per_page - 1) // per_page if per_page > 0 else 0
+        
+        # 获取分页数据
+        offset = (page - 1) * per_page
+        data_sql = f"""
+            SELECT id, unique_id, name, website, email, phones, facebook, twitter,
+                   instagram, linkedin, whatsapp, youtube, city, product, send_count,
+                   updated_at, created_at
+            FROM business_records
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        cursor.execute(data_sql, params + [per_page, offset])
+        
+        columns = ['id', 'unique_id', 'name', 'website', 'email', 'phones', 'facebook',
+                   'twitter', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'city',
+                   'product', 'send_count', 'updated_at', 'created_at']
+        
+        for row in cursor.fetchall():
+            record = dict(zip(columns, row))
+            result['records'].append(record)
+        
+    except Error as e:
+        print(f"[DB ERROR] 获取历史记录失败: {e}", file=sys.stderr)
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+    
+    return result
+
+
+def update_send_count(record_ids: list) -> bool:
+    """
+    更新发送次数
+    
+    Args:
+        record_ids: 记录ID列表
+        
+    Returns:
+        bool: 是否成功
+    """
+    if not record_ids:
+        return False
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return False
+        
+        cursor = connection.cursor()
+        placeholders = ','.join(['?' for _ in record_ids])
+        cursor.execute(f"""
+            UPDATE business_records 
+            SET send_count = send_count + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id IN ({placeholders})
+        """, record_ids)
+        connection.commit()
+        print(f"[DB] 更新发送次数: {len(record_ids)} 条记录", file=sys.stderr)
+        return True
+        
+    except Error as e:
+        print(f"[DB ERROR] 更新发送次数失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def get_last_position(url: str) -> int:
+    """
+    获取上次抓取位置
+    
+    Args:
+        url: 抓取URL标识
+        
+    Returns:
+        int: 上次位置，默认0
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return 0
+        
+        cursor = connection.cursor()
+        cursor.execute("SELECT last_position FROM last_extraction_positions WHERE url = ?", (url,))
+        row = cursor.fetchone()
+        return row[0] if row else 0
+        
+    except Error as e:
+        print(f"[DB ERROR] 获取位置失败: {e}", file=sys.stderr)
+        return 0
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def save_last_position(url: str, position: int) -> bool:
+    """
+    保存抓取位置
+    
+    Args:
+        url: 抓取URL标识
+        position: 当前位置
+        
+    Returns:
+        bool: 是否成功
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return False
+        
+        cursor = connection.cursor()
         cursor.execute("""
-            SELECT id, provider, api_key_encrypted, model_name, temperature, 
-                   max_tokens, is_active, updated_at, created_at
+            INSERT OR REPLACE INTO last_extraction_positions (url, last_position, timestamp)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+        """, (url, position))
+        connection.commit()
+        return True
+        
+    except Error as e:
+        print(f"[DB ERROR] 保存位置失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def get_facebook_non_email() -> list:
+    """
+    获取有Facebook但无邮箱的记录
+    
+    Returns:
+        list: 记录列表
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return []
+        
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT id, unique_id, name, website, facebook
+            FROM business_records
+            WHERE facebook IS NOT NULL AND facebook != ''
+            AND (email IS NULL OR email = '')
+        """)
+        
+        columns = ['id', 'unique_id', 'name', 'website', 'facebook']
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+    except Error as e:
+        print(f"[DB ERROR] 获取Facebook记录失败: {e}", file=sys.stderr)
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def update_business_email(record_id: int, email: str) -> bool:
+    """
+    更新商家邮箱
+    
+    Args:
+        record_id: 记录ID
+        email: 邮箱地址
+        
+    Returns:
+        bool: 是否成功
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return False
+        
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE business_records 
+            SET email = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (email, record_id))
+        connection.commit()
+        return cursor.rowcount > 0
+        
+    except Error as e:
+        print(f"[DB ERROR] 更新邮箱失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def delete_business_email(record_id: int) -> bool:
+    """
+    删除商家记录
+    
+    Args:
+        record_id: 记录ID
+        
+    Returns:
+        bool: 是否成功
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return False
+        
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM business_records WHERE id = ?", (record_id,))
+        connection.commit()
+        return cursor.rowcount > 0
+        
+    except Error as e:
+        print(f"[DB ERROR] 删除记录失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+# ============================================================================
+# AI 配置相关函数
+# ============================================================================
+
+def get_ai_configuration() -> Optional[dict]:
+    """
+    获取AI配置
+    
+    Returns:
+        dict: AI配置信息，或None
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return None
+        
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT id, provider, api_endpoint, api_key_encrypted, model_name,
+                   temperature, max_tokens, is_active, updated_at, created_at
             FROM ai_configurations
             WHERE is_active = 1
             ORDER BY updated_at DESC
@@ -923,9 +714,22 @@ def get_ai_config():
         
         row = cursor.fetchone()
         if row:
-            columns = ['id', 'provider', 'api_key_encrypted', 'model_name', 
-                      'temperature', 'max_tokens', 'is_active', 'updated_at', 'created_at']
-            return dict(zip(columns, row))
+            return {
+                'id': row[0],
+                'provider': row[1],
+                'api_endpoint': row[2],
+                'api_key': row[3],  # 注意：这里返回的是加密的key
+                'model_name': row[4],
+                'temperature': row[5],
+                'max_tokens': row[6],
+                'is_active': row[7],
+                'updated_at': row[8],
+                'created_at': row[9]
+            }
+        return None
+        
+    except Error as e:
+        print(f"[DB ERROR] 获取AI配置失败: {e}", file=sys.stderr)
         return None
     finally:
         if cursor:
@@ -933,30 +737,78 @@ def get_ai_config():
         release_connection(connection)
 
 
-def save_ai_config(config):
-    """保存 AI 配置"""
+def save_ai_configuration(config: dict) -> bool:
+    """
+    保存AI配置
+    
+    Args:
+        config: 配置字典，包含 api_endpoint, api_key, model_name 等
+        
+    Returns:
+        bool: 是否成功
+    """
     connection = None
     cursor = None
+    
     try:
         connection = get_db_connection()
+        if not connection:
+            return False
+        
         cursor = connection.cursor()
         
-        cursor.execute("""
-            INSERT OR REPLACE INTO ai_configurations 
-            (provider, api_key_encrypted, model_name, temperature, max_tokens, is_active)
-            VALUES (?, ?, ?, ?, ?, 1)
-        """, (
-            config.get('provider', 'gemini'),
-            config.get('api_key_encrypted'),
-            config.get('model_name', 'gemini-1.5-flash'),
-            config.get('temperature', 0.7),
-            config.get('max_tokens', 1024)
-        ))
+        # 先将所有配置设为非活跃
+        cursor.execute("UPDATE ai_configurations SET is_active = 0")
+        
+        # 检查是否存在配置
+        cursor.execute("SELECT id FROM ai_configurations LIMIT 1")
+        existing = cursor.fetchone()
+        
+        if existing:
+            # 更新现有配置
+            cursor.execute("""
+                UPDATE ai_configurations 
+                SET provider = ?,
+                    api_endpoint = ?,
+                    api_key_encrypted = ?,
+                    model_name = ?,
+                    temperature = ?,
+                    max_tokens = ?,
+                    is_active = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (
+                config.get('provider', 'custom'),
+                config.get('api_endpoint', ''),
+                config.get('api_key', ''),
+                config.get('model_name', ''),
+                config.get('temperature', 0.7),
+                config.get('max_tokens', 1024),
+                existing[0]
+            ))
+        else:
+            # 插入新配置
+            cursor.execute("""
+                INSERT INTO ai_configurations 
+                (provider, api_endpoint, api_key_encrypted, model_name, temperature, max_tokens, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+            """, (
+                config.get('provider', 'custom'),
+                config.get('api_endpoint', ''),
+                config.get('api_key', ''),
+                config.get('model_name', ''),
+                config.get('temperature', 0.7),
+                config.get('max_tokens', 1024)
+            ))
         
         connection.commit()
+        print("[DB] AI配置保存成功", file=sys.stderr)
         return True
+        
     except Error as e:
-        print(f"保存 AI 配置失败: {e}", file=sys.stderr)
+        print(f"[DB ERROR] 保存AI配置失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
         return False
     finally:
         if cursor:
@@ -964,82 +816,86 @@ def save_ai_config(config):
         release_connection(connection)
 
 
-# ============================================================================
-# 国家城市映射相关函数 (Requirements 10.3)
-# ============================================================================
-
-def get_countries():
-    """获取所有国家列表"""
+def get_all_business_records() -> list:
+    """
+    获取所有商家记录（用于导出）
+    
+    Returns:
+        list: 所有记录列表
+    """
     connection = None
     cursor = None
+    
     try:
         connection = get_db_connection()
-        cursor = connection.cursor()
+        if not connection:
+            return []
         
+        cursor = connection.cursor()
         cursor.execute("""
-            SELECT DISTINCT country_code, country_name
-            FROM country_city_mappings
-            WHERE is_active = 1
-            ORDER BY country_name
+            SELECT id, unique_id, name, website, email, phones, facebook, twitter,
+                   instagram, linkedin, whatsapp, youtube, city, product, send_count,
+                   updated_at, created_at
+            FROM business_records
+            ORDER BY created_at DESC
         """)
         
-        return [{'code': row[0], 'name': row[1]} for row in cursor.fetchall()]
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-def get_cities_by_country(country_code):
-    """根据国家代码获取城市列表"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
+        columns = ['id', 'unique_id', 'name', 'website', 'email', 'phones', 'facebook',
+                   'twitter', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'city',
+                   'product', 'send_count', 'updated_at', 'created_at']
         
-        cursor.execute("""
-            SELECT city_name
-            FROM country_city_mappings
-            WHERE country_code = ? AND is_active = 1
-            ORDER BY city_name
-        """, (country_code,))
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
         
-        return [row[0] for row in cursor.fetchall()]
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
-def add_country_city_mapping(country_code, country_name, city_name):
-    """添加国家城市映射"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute("""
-            INSERT OR IGNORE INTO country_city_mappings 
-            (country_code, country_name, city_name)
-            VALUES (?, ?, ?)
-        """, (country_code, country_name, city_name))
-        
-        connection.commit()
-        return True
     except Error as e:
-        print(f"添加国家城市映射失败: {e}", file=sys.stderr)
-        return False
+        print(f"[DB ERROR] 获取所有记录失败: {e}", file=sys.stderr)
+        return []
     finally:
         if cursor:
             cursor.close()
         release_connection(connection)
 
 
-if __name__ == "__main__":
-    # 示例代码 - 请根据需要修改参数
-    # records, total = get_history_records(1, 10, "example")
-    # print(f"Records: {records}")
-    # print(f"Total: {total}")
-    pass
+def get_records_by_ids(record_ids: list) -> list:
+    """
+    根据ID列表获取记录
+    
+    Args:
+        record_ids: 记录ID列表
+        
+    Returns:
+        list: 记录列表
+    """
+    if not record_ids:
+        return []
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return []
+        
+        cursor = connection.cursor()
+        placeholders = ','.join(['?' for _ in record_ids])
+        cursor.execute(f"""
+            SELECT id, unique_id, name, website, email, phones, facebook, twitter,
+                   instagram, linkedin, whatsapp, youtube, city, product, send_count,
+                   updated_at, created_at
+            FROM business_records
+            WHERE id IN ({placeholders})
+        """, record_ids)
+        
+        columns = ['id', 'unique_id', 'name', 'website', 'email', 'phones', 'facebook',
+                   'twitter', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'city',
+                   'product', 'send_count', 'updated_at', 'created_at']
+        
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+    except Error as e:
+        print(f"[DB ERROR] 根据ID获取记录失败: {e}", file=sys.stderr)
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
