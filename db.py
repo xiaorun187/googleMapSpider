@@ -2,11 +2,35 @@ import sqlite3
 from sqlite3 import Error
 import sys
 import threading
+import uuid
 from queue import Queue
 from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Optional
 
 # SQLite database file path
 DB_FILE = "business.db"
+
+
+# ============================================================================
+# 数据验证结果类 (Requirements 4.1, 4.2)
+# ============================================================================
+@dataclass
+class ValidationResult:
+    """验证结果数据类"""
+    is_valid: bool
+    error_message: Optional[str] = None
+    existing_record: Optional[dict] = None
+
+
+def generate_unique_id() -> str:
+    """
+    生成 UUID 格式的唯一标识符
+    
+    Returns:
+        str: UUID 字符串
+    """
+    return str(uuid.uuid4())
 
 # ============================================================================
 # 连接池管理 (Requirements 4.5)
@@ -86,13 +110,14 @@ def init_database():
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # 创建 business_records 表（包含 city 字段）
+        # 创建 business_records 表（基于 name + website 唯一性判断）
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS business_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                unique_id TEXT NOT NULL,
                 name TEXT,
                 website TEXT,
-                email TEXT UNIQUE,
+                email TEXT,
                 phones TEXT,
                 facebook TEXT,
                 twitter TEXT,
@@ -158,12 +183,39 @@ def init_database():
         except Error:
             pass  # 列已存在
         
+        # 添加 unique_id 字段到现有表（如果不存在）
+        try:
+            cursor.execute("ALTER TABLE business_records ADD COLUMN unique_id TEXT")
+        except Error:
+            pass  # 列已存在
+        
+        # 为现有记录生成 unique_id（迁移逻辑）
+        cursor.execute("SELECT id FROM business_records WHERE unique_id IS NULL OR unique_id = ''")
+        records_without_uid = cursor.fetchall()
+        for (record_id,) in records_without_uid:
+            cursor.execute(
+                "UPDATE business_records SET unique_id = ? WHERE id = ?",
+                (generate_unique_id(), record_id)
+            )
+        
+        # 移除旧的 email 唯一索引（如果存在）
+        try:
+            cursor.execute("DROP INDEX IF EXISTS idx_business_email_unique")
+        except Error:
+            pass
+        
         # 创建索引以提高查询性能
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_email ON business_records(email)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_city ON business_records(city)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_product ON business_records(product)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_updated ON business_records(updated_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_country_city ON country_city_mappings(country_code)")
+        
+        # 创建 unique_id 唯一索引 (Requirements 3.3)
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_id ON business_records(unique_id)")
+        
+        # 创建 (name, website) 复合唯一索引 (Requirements 3.1)
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_name_website ON business_records(name, website)")
         
         connection.commit()
         print("数据库初始化完成", file=sys.stderr)
@@ -182,31 +234,116 @@ def init_database():
 init_database()
 
 
-def save_business_data_to_db(business_data):
+# ============================================================================
+# 数据唯一性验证函数 (Requirements 4.1, 4.2)
+# ============================================================================
+
+def check_duplicate_exists(name: str, website: str, exclude_id: int = None) -> Optional[dict]:
     """
-    Save business data to SQLite database with city field support
+    检查是否存在相同 name + website 的记录
     
-    Features:
-    - 使用事务批量处理 (Requirements 4.2)
-    - 错误回滚和单条重试 (Requirements 4.3)
-    - 支持 city 字段 (Requirements 9.3)
+    Args:
+        name: 商家名称
+        website: 商家网站
+        exclude_id: 排除的记录ID（用于更新操作）
+        
+    Returns:
+        Optional[dict]: 存在重复时返回现有记录，否则返回 None
     """
     connection = None
     cursor = None
-    failed_records = []
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if exclude_id:
+            cursor.execute("""
+                SELECT id, unique_id, name, website, email
+                FROM business_records
+                WHERE name = ? AND website = ? AND id != ?
+            """, (name, website, exclude_id))
+        else:
+            cursor.execute("""
+                SELECT id, unique_id, name, website, email
+                FROM business_records
+                WHERE name = ? AND website = ?
+            """, (name, website))
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'unique_id': row[1],
+                'name': row[2],
+                'website': row[3],
+                'email': row[4]
+            }
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def validate_uniqueness(name: str, website: str, exclude_id: int = None) -> ValidationResult:
+    """
+    验证 name + website 组合的唯一性
+    
+    Args:
+        name: 商家名称
+        website: 商家网站
+        exclude_id: 排除的记录ID（用于更新操作）
+        
+    Returns:
+        ValidationResult: 验证结果
+    """
+    existing = check_duplicate_exists(name, website, exclude_id)
+    
+    if existing:
+        return ValidationResult(
+            is_valid=False,
+            error_message=f"Record with name '{name}' and website '{website}' already exists (ID: {existing['id']})",
+            existing_record=existing
+        )
+    
+    return ValidationResult(is_valid=True)
+
+
+def save_business_data_to_db(business_data):
+    """
+    Save business data to SQLite database with name+website uniqueness
+    
+    Features:
+    - 基于 name + website 的唯一性判断 (Requirements 1.1, 1.2, 1.3)
+    - 使用事务批量处理 (Requirements 4.2)
+    - 错误回滚和单条重试 (Requirements 4.3)
+    - 自动生成 unique_id (Requirements 2.1)
+    - 支持 city 字段 (Requirements 9.3)
+    
+    Returns:
+        dict: 包含 success, inserted_count, skipped_count, errors 的结果
+    """
+    connection = None
+    cursor = None
+    result = {
+        'success': True,
+        'inserted_count': 0,
+        'skipped_count': 0,
+        'updated_count': 0,
+        'errors': []
+    }
     
     try:
         connection = get_db_connection()
         connection.execute("BEGIN TRANSACTION")
         cursor = connection.cursor()
 
-        # 优化：预处理所有数据，减少循环内的操作
-        insert_data = []
-        email_set = set()
+        # 用于跟踪本批次中的 name+website 组合
+        seen_combinations = set()
         
         for business in business_data:
-            name = business.get('name', '')
-            website = business.get('website', '')
+            name = business.get('name', '') or ''
+            website = business.get('website', '') or ''
             emails = business.get('emails', []) if business.get('emails') else []
             phones = ', '.join(business.get('phones', [])) if business.get('phones') else ''
             facebook = business.get('facebook', '')
@@ -215,78 +352,111 @@ def save_business_data_to_db(business_data):
             linkedin = business.get('linkedin', '')
             whatsapp = business.get('whatsapp', '')
             youtube = business.get('youtube', '')
-            city = business.get('city', '')  # 城市字段
-            product = business.get('product', '')  # 商品名/关键词字段
-
-            if not emails:
-                insert_data.append((name, website, None, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, city, product, 0))
+            city = business.get('city', '')
+            product = business.get('product', '')
+            
+            # 创建 name+website 组合键
+            combination_key = (name, website)
+            
+            # 检查本批次内是否已有相同组合
+            if combination_key in seen_combinations:
+                result['skipped_count'] += 1
+                continue
+            seen_combinations.add(combination_key)
+            
+            # 检查数据库中是否存在重复
+            existing = check_duplicate_exists(name, website)
+            
+            if existing:
+                # 更新现有记录
+                email_value = emails[0] if emails else None
+                cursor.execute("""
+                    UPDATE business_records 
+                    SET email = COALESCE(?, email),
+                        phones = COALESCE(NULLIF(?, ''), phones),
+                        facebook = COALESCE(NULLIF(?, ''), facebook),
+                        twitter = COALESCE(NULLIF(?, ''), twitter),
+                        instagram = COALESCE(NULLIF(?, ''), instagram),
+                        linkedin = COALESCE(NULLIF(?, ''), linkedin),
+                        whatsapp = COALESCE(NULLIF(?, ''), whatsapp),
+                        youtube = COALESCE(NULLIF(?, ''), youtube),
+                        city = COALESCE(NULLIF(?, ''), city),
+                        product = COALESCE(NULLIF(?, ''), product),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (email_value, phones, facebook, twitter, instagram, 
+                      linkedin, whatsapp, youtube, city, product, existing['id']))
+                result['updated_count'] += 1
             else:
-                for email in emails:
-                    if email in email_set:
-                        continue
-                    email_set.add(email)
-                    insert_data.append((name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, city, product, 0))
-
-        if insert_data:
-            cursor.executemany("""
-                INSERT OR REPLACE INTO business_records 
-                (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, city, product, send_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, insert_data)
+                # 插入新记录
+                unique_id = generate_unique_id()
+                email_value = emails[0] if emails else None
+                
+                cursor.execute("""
+                    INSERT INTO business_records 
+                    (unique_id, name, website, email, phones, facebook, twitter, 
+                     instagram, linkedin, whatsapp, youtube, city, product, send_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """, (unique_id, name, website, email_value, phones, facebook, 
+                      twitter, instagram, linkedin, whatsapp, youtube, city, product))
+                result['inserted_count'] += 1
 
         connection.commit()
-        print(f"Successfully saved {len(business_data)} business records to database", file=sys.stderr)
+        print(f"Successfully processed {len(business_data)} records: "
+              f"{result['inserted_count']} inserted, {result['updated_count']} updated, "
+              f"{result['skipped_count']} skipped", file=sys.stderr)
 
     except Error as e:
         if connection:
             connection.rollback()
-        print(f"Batch insert failed: {e}, trying single record insert...", file=sys.stderr)
-        
-        # 单条重试 (Requirements 4.3)
-        for record in insert_data:
-            try:
-                cursor.execute("""
-                    INSERT OR REPLACE INTO business_records 
-                    (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, city, product, send_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, record)
-                connection.commit()
-            except Error as single_error:
-                failed_records.append((record, str(single_error)))
-                print(f"Failed to save single record: {single_error}", file=sys.stderr)
-        
-        if failed_records:
-            print(f"Failed to save {len(failed_records)} records", file=sys.stderr)
+        result['success'] = False
+        result['errors'].append(str(e))
+        print(f"Failed to save business data: {e}", file=sys.stderr)
     finally:
         if cursor:
             cursor.close()
         release_connection(connection)
+    
+    return result
 
 
 def save_business_data_batch(business_data_list):
     """
-    批量保存商家数据到数据库，优化性能
+    批量保存商家数据到数据库，基于 name+website 唯一性判断
     
     Features:
+    - 基于 name + website 的唯一性判断 (Requirements 1.1, 1.2, 1.3)
     - 使用事务批量处理 (Requirements 4.2)
+    - 自动生成 unique_id (Requirements 2.1)
     - 支持 city 字段 (Requirements 9.3)
+    
+    Returns:
+        dict: 包含 success, inserted_count, skipped_count, errors 的结果
     """
     if not business_data_list:
-        return
+        return {'success': True, 'inserted_count': 0, 'skipped_count': 0, 'updated_count': 0, 'errors': []}
     
     connection = None
     cursor = None
+    result = {
+        'success': True,
+        'inserted_count': 0,
+        'skipped_count': 0,
+        'updated_count': 0,
+        'errors': []
+    }
+    
     try:
         connection = get_db_connection()
         connection.execute("BEGIN TRANSACTION")
         cursor = connection.cursor()
         
-        insert_values = []
-        email_set = set()
+        # 用于跟踪本批次中的 name+website 组合
+        seen_combinations = set()
         
         for business_data in business_data_list:
-            name = business_data.get('name', '')
-            website = business_data.get('website', '')
+            name = business_data.get('name', '') or ''
+            website = business_data.get('website', '') or ''
             emails = business_data.get('emails', []) if business_data.get('emails') else []
             phones = ','.join(business_data.get('phones', [])) if business_data.get('phones') else ''
             facebook = business_data.get('facebook', '')
@@ -295,36 +465,71 @@ def save_business_data_batch(business_data_list):
             linkedin = business_data.get('linkedin', '')
             whatsapp = business_data.get('whatsapp', '')
             youtube = business_data.get('youtube', '')
-            city = business_data.get('city', '')  # 城市字段
-            product = business_data.get('product', '')  # 商品名/关键词字段
+            city = business_data.get('city', '')
+            product = business_data.get('product', '')
             
-            if emails:
-                for email in emails:
-                    if email in email_set:
-                        continue
-                    email_set.add(email)
-                    insert_values.append((name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, city, product, 0))
+            # 创建 name+website 组合键
+            combination_key = (name, website)
+            
+            # 检查本批次内是否已有相同组合
+            if combination_key in seen_combinations:
+                result['skipped_count'] += 1
+                continue
+            seen_combinations.add(combination_key)
+            
+            # 检查数据库中是否存在重复
+            existing = check_duplicate_exists(name, website)
+            
+            if existing:
+                # 更新现有记录
+                email_value = emails[0] if emails else None
+                cursor.execute("""
+                    UPDATE business_records 
+                    SET email = COALESCE(?, email),
+                        phones = COALESCE(NULLIF(?, ''), phones),
+                        facebook = COALESCE(NULLIF(?, ''), facebook),
+                        twitter = COALESCE(NULLIF(?, ''), twitter),
+                        instagram = COALESCE(NULLIF(?, ''), instagram),
+                        linkedin = COALESCE(NULLIF(?, ''), linkedin),
+                        whatsapp = COALESCE(NULLIF(?, ''), whatsapp),
+                        youtube = COALESCE(NULLIF(?, ''), youtube),
+                        city = COALESCE(NULLIF(?, ''), city),
+                        product = COALESCE(NULLIF(?, ''), product),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (email_value, phones, facebook, twitter, instagram, 
+                      linkedin, whatsapp, youtube, city, product, existing['id']))
+                result['updated_count'] += 1
             else:
-                insert_values.append((name, website, None, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, city, product, 0))
-        
-        if insert_values:
-            cursor.executemany("""
-                INSERT OR REPLACE INTO business_records 
-                (name, website, email, phones, facebook, twitter, instagram, linkedin, whatsapp, youtube, city, product, send_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, insert_values)
+                # 插入新记录
+                unique_id = generate_unique_id()
+                email_value = emails[0] if emails else None
+                
+                cursor.execute("""
+                    INSERT INTO business_records 
+                    (unique_id, name, website, email, phones, facebook, twitter, 
+                     instagram, linkedin, whatsapp, youtube, city, product, send_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """, (unique_id, name, website, email_value, phones, facebook, 
+                      twitter, instagram, linkedin, whatsapp, youtube, city, product))
+                result['inserted_count'] += 1
         
         connection.commit()
-        print(f"Successfully saved {len(business_data_list)} business records in batch", file=sys.stderr)
+        print(f"Successfully processed {len(business_data_list)} records in batch: "
+              f"{result['inserted_count']} inserted, {result['updated_count']} updated, "
+              f"{result['skipped_count']} skipped", file=sys.stderr)
     except Error as e:
         if connection:
             connection.rollback()
+        result['success'] = False
+        result['errors'].append(str(e))
         print(f"Failed to save business data in batch: {e}", file=sys.stderr)
-        raise
     finally:
         if cursor:
             cursor.close()
         release_connection(connection)
+    
+    return result
 
 
 def get_history_records(page, size, query='', show_empty_email=False, city_filter=None):
@@ -343,9 +548,9 @@ def get_history_records(page, size, query='', show_empty_email=False, city_filte
 
         offset = (page - 1) * size
 
-        # Base SQL query with city and product fields
+        # Base SQL query with unique_id, city and product fields
         sql = """
-            SELECT id, name, website, email, phones, facebook, twitter, instagram, 
+            SELECT id, unique_id, name, website, email, phones, facebook, twitter, instagram, 
                    linkedin, whatsapp, youtube, city, product, send_count, updated_at, created_at
             FROM business_records
             WHERE 1=1
@@ -504,8 +709,7 @@ def update_business_email(business_id, email):
     except sqlite3.Error as err:
         print(f"Failed to update email in database: {err}")
         if "UNIQUE constraint failed" in str(err):
-            delete_business_email(business_id)
-            print(f"Duplicate email, deleted record: {business_id}")
+            print(f"Duplicate email detected for record {business_id}, keeping existing record")
         return False
     finally:
         if cursor:

@@ -1,11 +1,11 @@
 """
 DataDeduplicator - 数据去重组件
-实现基于邮箱的重复检测、完整度计算和记录合并
+实现基于 name + website 的重复检测、完整度计算和记录合并
 """
 import sys
 sys.path.insert(0, '.')
 
-from typing import Optional, List, Dict, Set
+from typing import Optional, List, Dict, Set, Tuple
 from models.business_record import BusinessRecord
 
 
@@ -14,7 +14,7 @@ class DataDeduplicator:
     数据去重组件，负责识别和处理重复的商家记录
     
     Features:
-    - 基于邮箱的重复检测
+    - 基于 name + website 的重复检测 (Requirements 1.1, 1.2, 1.3)
     - 完整度计算算法
     - 记录合并逻辑（保留更完整的记录）
     - 联系信息合并（保留所有唯一值）
@@ -22,7 +22,7 @@ class DataDeduplicator:
     
     def __init__(self):
         """初始化去重器"""
-        self._email_index: Dict[str, BusinessRecord] = {}
+        self._name_website_index: Dict[Tuple[str, str], BusinessRecord] = {}
     
     def check_duplicate(
         self, 
@@ -30,7 +30,7 @@ class DataDeduplicator:
         existing_records: List[BusinessRecord]
     ) -> Optional[BusinessRecord]:
         """
-        检查是否存在重复记录，返回匹配的现有记录或None
+        检查是否存在重复记录，基于 name + website 判断
         
         Args:
             record: 待检查的记录
@@ -39,16 +39,46 @@ class DataDeduplicator:
         Returns:
             Optional[BusinessRecord]: 匹配的现有记录，无重复则返回None
         """
-        if not record.email:
-            return None
-        
-        email_lower = record.email.lower()
+        record_name = (record.name or '').strip().lower()
+        record_website = (record.website or '').strip().lower()
         
         for existing in existing_records:
-            if existing.email and existing.email.lower() == email_lower:
+            existing_name = (existing.name or '').strip().lower()
+            existing_website = (existing.website or '').strip().lower()
+            
+            if record_name == existing_name and record_website == existing_website:
                 return existing
         
         return None
+    
+    def is_duplicate_by_name_website(
+        self,
+        name: str,
+        website: str,
+        existing_records: List[BusinessRecord]
+    ) -> bool:
+        """
+        基于 name + website 检查是否为重复记录
+        
+        Args:
+            name: 商家名称
+            website: 商家网站
+            existing_records: 现有记录列表
+            
+        Returns:
+            bool: 是否为重复记录
+        """
+        name_lower = (name or '').strip().lower()
+        website_lower = (website or '').strip().lower()
+        
+        for existing in existing_records:
+            existing_name = (existing.name or '').strip().lower()
+            existing_website = (existing.website or '').strip().lower()
+            
+            if name_lower == existing_name and website_lower == existing_website:
+                return True
+        
+        return False
     
     def merge_records(
         self, 
@@ -161,7 +191,7 @@ class DataDeduplicator:
         records: List[BusinessRecord]
     ) -> List[BusinessRecord]:
         """
-        对记录列表进行去重
+        对记录列表进行去重，基于 name + website 组合
         
         Args:
             records: 记录列表
@@ -169,26 +199,24 @@ class DataDeduplicator:
         Returns:
             List[BusinessRecord]: 去重后的记录列表
         """
-        result: Dict[str, BusinessRecord] = {}
-        no_email_records: List[BusinessRecord] = []
+        result: Dict[Tuple[str, str], BusinessRecord] = {}
         
         for record in records:
-            if not record.email:
-                no_email_records.append(record)
-                continue
+            # 创建 name + website 组合键
+            name_key = (record.name or '').strip().lower()
+            website_key = (record.website or '').strip().lower()
+            combination_key = (name_key, website_key)
             
-            email_lower = record.email.lower()
-            
-            if email_lower in result:
+            if combination_key in result:
                 # 合并重复记录
-                result[email_lower] = self.merge_records(
-                    result[email_lower], 
+                result[combination_key] = self.merge_records(
+                    result[combination_key], 
                     record
                 )
             else:
-                result[email_lower] = record
+                result[combination_key] = record
         
-        return list(result.values()) + no_email_records
+        return list(result.values())
     
     def is_duplicate(
         self, 
@@ -196,7 +224,7 @@ class DataDeduplicator:
         existing_records: List[BusinessRecord]
     ) -> bool:
         """
-        检查记录是否为重复
+        检查记录是否为重复，基于 name + website 判断
         
         Args:
             record: 待检查的记录
@@ -206,3 +234,17 @@ class DataDeduplicator:
             bool: 是否为重复记录
         """
         return self.check_duplicate(record, existing_records) is not None
+    
+    def get_combination_key(self, record: BusinessRecord) -> Tuple[str, str]:
+        """
+        获取记录的 name + website 组合键
+        
+        Args:
+            record: 商家记录
+            
+        Returns:
+            Tuple[str, str]: (name, website) 组合键
+        """
+        name = (record.name or '').strip().lower()
+        website = (record.website or '').strip().lower()
+        return (name, website)

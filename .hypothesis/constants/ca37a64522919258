@@ -1,0 +1,4 @@
+# file: /Users/hanglu/gooogleMapSpider/config.py
+# hypothesis_version: 6.148.7
+
+['*', 'CHROMEDRIVER_PATH', 'CHROME_BIN', 'V000000008954', 'darwin', 'nt', 'output', 'replace', 'utf-8', 'your-secret-key']

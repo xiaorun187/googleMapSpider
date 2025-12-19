@@ -15,6 +15,7 @@ class BusinessRecord:
     
     Attributes:
         id: 记录ID
+        unique_id: UUID格式的唯一标识符
         name: 商家名称
         website: 商家网站
         email: 邮箱地址
@@ -30,8 +31,12 @@ class BusinessRecord:
         send_count: 发送次数
         created_at: 创建时间
         updated_at: 更新时间
+    
+    Note:
+        唯一性判断基于 name + website 组合，而非 email
     """
     id: Optional[int] = None
+    unique_id: Optional[str] = None  # UUID 唯一标识符
     name: str = ''
     website: Optional[str] = None
     email: Optional[str] = None
@@ -81,6 +86,7 @@ class BusinessRecord:
         
         return cls(
             id=data.get('id'),
+            unique_id=data.get('unique_id'),
             name=data.get('name', ''),
             website=data.get('website'),
             email=email,
@@ -145,6 +151,7 @@ class BusinessRecord:
         # 选择非空值
         return BusinessRecord(
             id=self.id or other.id,
+            unique_id=self.unique_id or other.unique_id,
             name=self.name or other.name,
             website=self.website or other.website,
             email=self.email or other.email,
@@ -163,15 +170,23 @@ class BusinessRecord:
         )
     
     def __eq__(self, other) -> bool:
-        """判断两条记录是否相等（基于邮箱）"""
+        """
+        判断两条记录是否相等（基于 name + website 组合）
+        
+        当 name 和 website 都相同时，判定为相同记录
+        """
         if not isinstance(other, BusinessRecord):
             return False
-        if self.email and other.email:
-            return self.email.lower() == other.email.lower()
-        return False
+        # 标准化比较：将 None 和空字符串视为等价
+        self_name = (self.name or '').strip().lower()
+        other_name = (other.name or '').strip().lower()
+        self_website = (self.website or '').strip().lower()
+        other_website = (other.website or '').strip().lower()
+        
+        return self_name == other_name and self_website == other_website
     
     def __hash__(self) -> int:
-        """哈希值（基于邮箱）"""
-        if self.email:
-            return hash(self.email.lower())
-        return hash(id(self))
+        """哈希值（基于 name + website 组合）"""
+        name = (self.name or '').strip().lower()
+        website = (self.website or '').strip().lower()
+        return hash((name, website))

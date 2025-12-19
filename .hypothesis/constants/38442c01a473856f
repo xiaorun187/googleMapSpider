@@ -1,0 +1,4 @@
+# file: /Users/hanglu/gooogleMapSpider/models/ai_configuration.py
+# hypothesis_version: 6.148.7
+
+['AIConfiguration', 'api_endpoint', 'api_key', 'model', 'utf-8']

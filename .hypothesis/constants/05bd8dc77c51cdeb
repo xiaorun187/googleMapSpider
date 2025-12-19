@@ -1,0 +1,4 @@
+# file: /Users/hanglu/gooogleMapSpider/utils/rate_limiter.py
+# hypothesis_version: 6.148.7
+
+[0.3, 2.0, 60.0]

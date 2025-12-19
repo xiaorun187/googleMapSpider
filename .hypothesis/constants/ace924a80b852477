@@ -1,0 +1,4 @@
+# file: /Users/hanglu/gooogleMapSpider/validators/phone_validator.py
+# hypothesis_version: 6.148.7
+
+['+', '\\d']

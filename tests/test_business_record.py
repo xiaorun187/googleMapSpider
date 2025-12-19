@@ -260,7 +260,8 @@ class TestEdgeCases:
             linkedin='li',
             whatsapp='wa',
             youtube='yt',
-            city='Beijing'
+            city='Beijing',
+            product='sofa'  # 添加 product 字段
         )
         
         empty_score = empty_record.get_completeness_score()

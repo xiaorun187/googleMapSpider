@@ -1,0 +1,4 @@
+# file: /Users/hanglu/gooogleMapSpider/models/__init__.py
+# hypothesis_version: 6.148.7
+
+['AIConfiguration', 'BusinessRecord', 'CountryCityMapping']

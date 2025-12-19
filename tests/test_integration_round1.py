@@ -69,7 +69,7 @@ class TestIntegrationRound1:
         
         deduplicator = DataDeduplicator()
         
-        # 创建测试记录
+        # 创建测试记录（基于 name + website 判断重复）
         record1 = BusinessRecord(
             name="Test Business",
             email="test@example.com",
@@ -77,16 +77,16 @@ class TestIntegrationRound1:
         )
         
         record2 = BusinessRecord(
-            name="Test Business Updated",
-            email="test@example.com",
-            website="https://example.com",
+            name="Test Business",  # 相同的 name
+            email="test2@example.com",  # 不同的 email
+            website="https://example.com",  # 相同的 website
             phones=["1234567890"]
         )
         
-        # 检测重复
+        # 检测重复（基于 name + website）
         existing = [record1]
         duplicate = deduplicator.check_duplicate(record2, existing)
-        assert duplicate is not None, "应该检测到重复记录"
+        assert duplicate is not None, "应该检测到重复记录（相同 name + website）"
         
         # 合并记录
         merged = deduplicator.merge_records(record1, record2)

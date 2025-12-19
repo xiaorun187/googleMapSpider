@@ -135,50 +135,54 @@ def two_records_with_different_phones(draw):
 
 
 # ============================================================================
-# Property 7: Duplicate Detection by Email
-# **Feature: data-collection-optimization, Property 7: Duplicate Detection by Email**
+# Property 7: Duplicate Detection by Name + Website
+# **Feature: data-collection-optimization, Property 7: Duplicate Detection by Name + Website**
 # **Validates: Requirements 2.1**
 # ============================================================================
 
-class TestDuplicateDetectionByEmail:
-    """Property 7: 基于邮箱的重复检测"""
+class TestDuplicateDetectionByNameWebsite:
+    """Property 7: 基于 name + website 的重复检测"""
     
     @given(data=two_records_same_email())
     @settings(max_examples=100)
-    def test_same_email_detected_as_duplicate(self, data):
+    def test_same_name_website_detected_as_duplicate(self, data):
         """
-        *For any* two BusinessRecord objects with the same email address,
+        *For any* two BusinessRecord objects with the same name and website,
         the DataDeduplicator SHALL identify them as duplicates.
-        **Feature: data-collection-optimization, Property 7: Duplicate Detection by Email**
+        **Feature: data-collection-optimization, Property 7: Duplicate Detection by Name + Website**
         **Validates: Requirements 2.1**
         """
         record1, record2 = data
+        # 设置相同的 name 和 website
+        record2.name = record1.name
+        record2.website = record1.website
+        
         deduplicator = DataDeduplicator()
         
         # 检查 record2 是否被识别为 record1 的重复
         duplicate = deduplicator.check_duplicate(record2, [record1])
         
         assert duplicate is not None, \
-            f"Records with same email '{record1.email}' not detected as duplicates"
+            f"Records with same name '{record1.name}' and website '{record1.website}' not detected as duplicates"
     
     @given(record1=business_record(), record2=business_record())
     @settings(max_examples=100)
-    def test_different_emails_not_duplicates(self, record1, record2):
+    def test_different_name_not_duplicates(self, record1, record2):
         """
-        *For any* two BusinessRecord objects with different email addresses,
+        *For any* two BusinessRecord objects with different names,
         the DataDeduplicator SHALL NOT identify them as duplicates.
-        **Feature: data-collection-optimization, Property 7: Duplicate Detection by Email**
+        **Feature: data-collection-optimization, Property 7: Duplicate Detection by Name + Website**
         **Validates: Requirements 2.1**
         """
-        # 确保邮箱不同
-        assume(record1.email and record2.email)
-        assume(record1.email.lower() != record2.email.lower())
+        # 确保名称不同
+        assume(record1.name and record2.name)
+        assume((record1.name or '').strip().lower() != (record2.name or '').strip().lower())
         
         deduplicator = DataDeduplicator()
         duplicate = deduplicator.check_duplicate(record2, [record1])
         
         assert duplicate is None, \
-            f"Records with different emails detected as duplicates"
+            f"Records with different names detected as duplicates"
 
 
 # ============================================================================
@@ -291,45 +295,45 @@ class TestEdgeCases:
     def test_empty_record_list(self):
         """空记录列表应该返回 None"""
         deduplicator = DataDeduplicator()
-        record = BusinessRecord(email='test@example.com')
+        record = BusinessRecord(name='Test', website='http://test.com')
         
         duplicate = deduplicator.check_duplicate(record, [])
         assert duplicate is None
     
-    def test_record_without_email(self):
-        """没有邮箱的记录不应该被检测为重复"""
+    def test_same_name_different_website(self):
+        """相同名称但不同网站不应该被检测为重复"""
         deduplicator = DataDeduplicator()
-        record1 = BusinessRecord(name='Business 1')
-        record2 = BusinessRecord(name='Business 2')
+        record1 = BusinessRecord(name='Business', website='http://a.com')
+        record2 = BusinessRecord(name='Business', website='http://b.com')
         
         duplicate = deduplicator.check_duplicate(record1, [record2])
         assert duplicate is None
     
-    def test_case_insensitive_email_matching(self):
-        """邮箱匹配应该不区分大小写"""
+    def test_case_insensitive_name_website_matching(self):
+        """name + website 匹配应该不区分大小写"""
         deduplicator = DataDeduplicator()
-        record1 = BusinessRecord(email='Test@Example.COM')
-        record2 = BusinessRecord(email='test@example.com')
+        record1 = BusinessRecord(name='TEST BUSINESS', website='HTTP://TEST.COM')
+        record2 = BusinessRecord(name='test business', website='http://test.com')
         
         duplicate = deduplicator.check_duplicate(record2, [record1])
         assert duplicate is not None
     
     def test_deduplicate_list(self):
-        """测试列表去重功能"""
+        """测试列表去重功能（基于 name + website）"""
         deduplicator = DataDeduplicator()
         records = [
-            BusinessRecord(email='a@test.com', name='A1'),
-            BusinessRecord(email='b@test.com', name='B'),
-            BusinessRecord(email='a@test.com', name='A2', website='http://a.com'),
+            BusinessRecord(name='A', website='http://a.com', email='a1@test.com'),
+            BusinessRecord(name='B', website='http://b.com', email='b@test.com'),
+            BusinessRecord(name='A', website='http://a.com', email='a2@test.com', city='Beijing'),
         ]
         
         result = deduplicator.deduplicate_list(records)
         
-        # 应该只有2条记录（a@test.com 被合并）
+        # 应该只有2条记录（name='A', website='http://a.com' 被合并）
         assert len(result) == 2
         
-        # 找到合并后的 a@test.com 记录
-        a_record = next((r for r in result if r.email == 'a@test.com'), None)
+        # 找到合并后的 A 记录
+        a_record = next((r for r in result if r.name == 'A'), None)
         assert a_record is not None
-        # 应该保留 website（来自更完整的记录）
-        assert a_record.website == 'http://a.com'
+        # 应该保留 city（来自更完整的记录）
+        assert a_record.city == 'Beijing'

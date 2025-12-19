@@ -1,0 +1,4 @@
+# file: /Users/hanglu/gooogleMapSpider/utils/history_manager.py
+# hypothesis_version: 6.148.7
+
+[' AND city = ?', ',', ', ', '.', '?', 'business.db', 'city', 'email', 'facebook', 'instagram', 'linkedin', 'name', 'phones', 'product', 'send_count', 'show_empty_email', 'twitter', 'website', 'whatsapp', 'youtube', '商家名称不能为空', '网站URL格式无效']

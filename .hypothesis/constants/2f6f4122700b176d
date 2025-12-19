@@ -1,0 +1,4 @@
+# file: /Users/hanglu/gooogleMapSpider/utils/anti_detection.py
+# hypothesis_version: 6.148.7
+
+['--disable-extensions', '--disable-gpu', '--disable-images', '--disable-infobars', '--disable-plugins', '--disk-cache-size=1', '--media-cache-size=1', '--no-sandbox', 'enable-automation', 'excludeSwitches']
