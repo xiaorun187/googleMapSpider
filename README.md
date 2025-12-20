@@ -12,7 +12,7 @@
 - [部署方式](#-部署方式)
   - [一键部署脚本（推荐）](#一键部署脚本推荐)
   - [手动Docker部署](#手动docker部署)
-  - [服务器完整部署流程](#-服务器完整部署流程)
+  - [服务器完整部署流程](#服务器完整部署流程)
 - [配置说明](#-配置说明)
 - [常见问题解决](#-常见问题解决)
 - [项目结构](#-项目结构)
@@ -57,12 +57,12 @@
 
 ### 一键部署脚本（推荐）
 
-我们提供了自动化部署脚本 `quick-deploy.sh`，可以一键完成代码上传和部署。
+我们提供了自动化部署脚本 `deploy.sh`，可以一键完成代码打包、上传和部署。
 
 #### 1. 准备工作
 ```bash
 # 确保脚本有执行权限
-chmod +x quick-deploy.sh
+chmod +x deploy.sh
 
 # 配置SSH密钥认证（避免每次输入密码）
 ssh-copy-id root@<服务器IP>
@@ -70,29 +70,30 @@ ssh-copy-id root@<服务器IP>
 
 #### 2. 部署命令
 ```bash
-# 完整部署（首次使用）
-./quick-deploy.sh deploy
-
-# 代码更新后快速部署
-./quick-deploy.sh update
-
-# 仅上传代码
-./quick-deploy.sh upload
-
-# 检查应用状态
-./quick-deploy.sh status
-
-# 查看应用日志
-./quick-deploy.sh logs
-
-# 查看帮助
-./quick-deploy.sh help
+# 一键部署（包含打包、上传、部署和验证）
+./deploy.sh
 ```
 
-#### 3. 访问应用
+#### 3. 部署流程
+脚本将自动执行以下步骤：
+1. **构建部署包**：创建精简的部署包，自动排除不必要文件
+2. **安全传输**：通过SCP将部署包传输到服务器
+3. **服务器部署**：解压部署包，停止旧容器，启动新容器
+4. **部署验证**：检查容器状态和应用响应
+
+#### 4. 访问应用
 部署成功后，通过浏览器访问：`http://<服务器IP>:8088`
 
+#### 5. 脚本特性
+- 自动错误处理和回滚
+- 详细的日志输出和进度显示
+- 文件完整性校验
+- 应用状态验证
+- 自动清理临时文件
+
 ### 手动Docker部署
+
+如果您需要手动部署或进行自定义配置，可以按照以下步骤操作：
 
 #### 1. 环境准备
 ```bash
@@ -135,20 +136,25 @@ netstat -tlnp | grep 8088
 
 # 测试HTTP响应
 curl -I http://localhost:8088
+
+# 测试登录页面
+curl -I http://localhost:8088/login
 ```
 
 ### 服务器完整部署流程
 
+如果您需要完全手动控制部署过程，可以按照以下详细步骤操作：
+
 #### 1. 本地准备
 ```bash
 # 生成部署包（自动排除无关文件）
-zip -r deploy.zip . -x ".hypothesis/*" ".kiro/*" "tests/*" ".git/*" "__pycache__/*" "*.pyc" ".DS_Store" "business.db-shm" "business.db-wal" "progress/*" ".venv/*" ".vscode/*" ".idea/*"
+zip -r google-maps-spider.zip app.py requirements.txt docker-compose.yml Dockerfile docker-entrypoint.sh templates static config models utils validators *.py -x "*.git*" "*node_modules*" "*.env*" "*logs*" "*__pycache__*" "*.pyc" ".DS_Store" "*venv*"
 ```
 
 #### 2. 上传到服务器
 ```bash
 # 上传部署包
-scp deploy.zip root@<服务器IP>:/root/
+scp google-maps-spider.zip root@<服务器IP>:/opt/
 
 # 登录服务器
 ssh root@<服务器IP>
@@ -158,19 +164,25 @@ ssh root@<服务器IP>
 ```bash
 # 创建部署目录
 mkdir -p /opt/google-maps-spider
-cd /opt/google-maps-spider
+cd /opt
 
 # 解压部署包
-unzip -o /root/deploy.zip
+unzip -o google-maps-spider.zip -d /opt/google-maps-spider
+
+# 进入应用目录
+cd /opt/google-maps-spider
 
 # 停止旧容器（如果存在）
 docker-compose down 2>/dev/null || true
 
 # 构建并启动新容器
-docker-compose up --build -d
+docker-compose up -d --build
 
 # 验证部署
 docker-compose ps
+
+# 检查应用日志（可选）
+docker-compose logs --tail=50
 ```
 
 ## ⚙️ 配置说明
