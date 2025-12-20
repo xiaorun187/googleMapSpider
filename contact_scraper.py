@@ -6,7 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
-from db import save_business_data_to_db
+from db import save_business_data_to_db, save_single_business_to_db
 from facebook_email_fetcher import extract_single_facebook_email_info
 from scraper import should_stop_extraction
 
@@ -103,42 +103,6 @@ def extract_contact_info(driver, business_data_list):
     优化后的联系方式提取函数
     """
     total = len(business_data_list)
-    # ... (existing content logic)
-    # Actually, let's keep the core function as is and add a helper or modify the entry point.
-    # The user wants to "Enhance contact extraction feature".
-
-def extract_contacts_by_ids(driver, record_ids: list):
-    """
-    针对指定的记录 ID 列表进行定向联系方式提取
-    """
-    from db import get_db_connection, release_connection
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    placeholders = ','.join(['?' for _ in record_ids])
-    cursor.execute(f"SELECT id, name, website, city, product FROM business_records WHERE id IN ({placeholders})", record_ids)
-    
-    records = []
-    for row in cursor.fetchall():
-        records.append({
-            'id': row[0],
-            'name': row[1],
-            'website': row[2],
-            'city': row[3],
-            'product': row[4]
-        })
-    
-    cursor.close()
-    release_connection(conn)
-    
-    if not records:
-        print("未找到对应的记录", file=sys.stderr)
-        return
-
-    # 调用核心提取逻辑
-    for progress, name, data, msg in extract_contact_info(driver, records):
-        yield progress, name, data, msg
     
     # 优化：预编译正则表达式，避免重复编译
     email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
@@ -152,8 +116,29 @@ def extract_contacts_by_ids(driver, record_ids: list):
         if should_stop_extraction():
             print("收到停止信号，停止联系方式提取")
             break
+        
+        # 确保business是字典类型，如果是元组则转换为字典
+        if isinstance(business, tuple):
+            print(f"警告: business是元组类型，尝试转换为字典")
+            # 假设元组格式为 (id, name, website, city, product)
+            if len(business) >= 3:
+                business = {
+                    'id': business[0] if len(business) > 0 else None,
+                    'name': business[1] if len(business) > 1 else 'Unknown',
+                    'website': business[2] if len(business) > 2 else None,
+                    'city': business[3] if len(business) > 3 else None,
+                    'product': business[4] if len(business) > 4 else None
+                }
+            else:
+                print(f"错误: 元组格式不正确，跳过此记录: {business}")
+                continue
+        
+        # 再次检查business是否为字典
+        if not isinstance(business, dict):
+            print(f"错误: business不是字典类型，跳过此记录: {type(business)} - {business}")
+            continue
             
-        name = business['name']
+        name = business.get('name', 'Unknown')
         website = business.get('website')
         if not website:
             print(f"{name} 无网站，跳过联系方式提取")
@@ -296,6 +281,7 @@ def extract_contacts_by_ids(driver, record_ids: list):
                     business[key] = urls[0] if urls else None
                 if business[key]:
                     print(f"提取到 {name} 的 {label}: {business[key]}")
+                    
             if not business.get('emails') and business.get('facebook'):
                 yield progress, name, business, f"未找到邮箱，开始从facebook提取 {name} "
                 business['emails']=extract_single_facebook_email_info(driver,business.get('facebook'))
@@ -329,21 +315,43 @@ def extract_contacts_by_ids(driver, record_ids: list):
                     print(f"[DB ERROR] 保存失败 [{name}]: {result['error']}")
             except Exception as e:
                 print(f"[DB ERROR] 保存异常 [{name}]: {e}")
+                
+            yield progress, name, business, f"成功提取 {name} 的联系方式"
             
-            yield progress, name, business, f"成功提取 {name} 的联系方式并已保存到数据库"
-
         except Exception as e:
-            _logger.log_error(e, {'name': name, 'website': website})
-            print(f"提取 {name} 的联系方式时出错: {e}", file=sys.stderr)
-            yield progress, name, business, f"提取 {name} 的联系方式失败: {e}"
+            print(f"提取 {name} 联系方式时出错: {e}")
+            _logger.log_extraction(website, 0, 1)
+            yield i, name, business, f"提取 {name} 联系方式失败: {str(e)}"
+
+def extract_contacts_by_ids(driver, record_ids: list):
+    """
+    针对指定的记录 ID 列表进行定向联系方式提取
+    """
+    from db import get_db_connection, release_connection
     
-    # 处理剩余的批量数据
-    remaining_data = _batch_processor.flush()
-    if remaining_data:
-        unique_data = _deduplicator.deduplicate(remaining_data)
-        try:
-            save_business_data_to_db(unique_data)
-            print(f"已保存剩余 {len(unique_data)} 条数据到数据库")
-        except Exception as db_error:
-            print(f"保存剩余数据失败: {db_error}", file=sys.stderr)
-            _logger.log_error(db_error, {'batch_size': len(unique_data)})
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    placeholders = ','.join(['?' for _ in record_ids])
+    cursor.execute(f"SELECT id, name, website, city, product FROM business_records WHERE id IN ({placeholders})", record_ids)
+    
+    records = []
+    for row in cursor.fetchall():
+        records.append({
+            'id': row[0],
+            'name': row[1],
+            'website': row[2],
+            'city': row[3],
+            'product': row[4]
+        })
+    
+    cursor.close()
+    release_connection(conn)
+    
+    if not records:
+        print("未找到对应的记录", file=sys.stderr)
+        return
+
+    # 调用核心提取逻辑
+    for progress, name, data, msg in extract_contact_info(driver, records):
+        yield progress, name, data, msg

@@ -839,6 +839,54 @@
             }
         }
 
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        // Socket IO 连接
+        const socket = io();
+        
+        // 监听定向提取进度更新
+        socket.on('progress_update', (d) => {
+            console.log('收到进度更新:', d);
+            if (d.message) {
+                // 创建或更新进度提示
+                let progressDiv = document.getElementById('extract-progress');
+                if (!progressDiv) {
+                    progressDiv = document.createElement('div');
+                    progressDiv.id = 'extract-progress';
+                    progressDiv.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: rgba(0, 0, 0, 0.8);
+                        color: white;
+                        padding: 15px;
+                        border-radius: 5px;
+                        z-index: 1000;
+                        max-width: 300px;
+                    `;
+                    document.body.appendChild(progressDiv);
+                }
+                
+                progressDiv.innerHTML = `
+                    <div style="margin-bottom: 10px;">定向提取联系人</div>
+                    <div style="font-size: 12px;">${d.message}</div>
+                    ${d.progress ? `<div style="margin-top: 10px; background: #444; height: 5px; border-radius: 3px;"><div style="background: #4CAF50; height: 100%; width: ${d.progress}%; border-radius: 3px;"></div></div>` : ''}
+                `;
+                
+                // 如果完成，3秒后移除提示
+                if (d.progress === 100) {
+                    setTimeout(() => {
+                        if (progressDiv.parentNode) {
+                            progressDiv.parentNode.removeChild(progressDiv);
+                        }
+                        // 刷新数据
+                        loadData();
+                    }, 3000);
+                }
+            }
+        });
+        
         // Init
         loadData();
     </script>

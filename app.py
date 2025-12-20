@@ -601,8 +601,8 @@ def extract_contacts():
 
     def background_contact_extraction(proxy=None):
         with app.app_context():
-            from chrome_driver import create_driver
-            driver = create_driver(headless=True, proxy=proxy)
+            from chrome_driver import get_chrome_driver as create_driver
+            driver, proxy_info = create_driver(proxy=proxy, headless=True)
             try:
                 # 获取有网站但没邮箱的记录
                 from db import get_db_connection, release_connection
@@ -635,8 +635,8 @@ def extract_contacts():
 def background_target_contact_extraction(record_ids, proxy=None):
     """后台定向联系方式提取"""
     with app.app_context():
-        from chrome_driver import create_driver
-        driver = create_driver(headless=True, proxy=proxy)
+        from chrome_driver import get_chrome_driver as create_driver
+        driver, proxy_info = create_driver(proxy=proxy, headless=True)
         try:
             from contact_scraper import extract_contacts_by_ids
             for progress, name, data, msg in extract_contacts_by_ids(driver, record_ids):
@@ -733,11 +733,12 @@ def target_extract_contacts():
     
     data = request.get_json()
     record_ids = data.get('ids', [])
+    proxy = data.get('proxy', None)
     if not record_ids:
         return jsonify({"status": "error", "message": "没有选中的记录"}), 400
 
     # 启动后台线程进行定向爬取
-    thread = threading.Thread(target=background_target_contact_extraction, args=(record_ids,))
+    thread = threading.Thread(target=background_target_contact_extraction, args=(record_ids, proxy))
     thread.daemon = True
     thread.start()
     
@@ -1157,6 +1158,6 @@ def proxy_gemini_api():
         # 处理其他未知错误
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5001))
+    port = int(os.environ.get('PORT', 5000))
     # 使用 socketio.run 启动，支持 WebSocket
     socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)

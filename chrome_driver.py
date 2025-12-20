@@ -217,20 +217,27 @@ def create_proxy_auth_extension(proxy_host, proxy_port, username, password):
         zp.writestr("background.js", background_js)
     return proxy_extension
 
-def get_chrome_driver(proxy=None):
+def get_chrome_driver(proxy=None, headless=None):
     chrome_options = Options()
     # 常用配置
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     
-    # 根据环境变量决定是否启用无头模式
-    if os.environ.get("IS_DOCKER") == "true":
-        print("Docker 环境检测: 启用无头模式 (headless=new)")
+    # 决定是否启用无头模式
+    is_headless = False
+    if headless is not None:
+        # 如果明确指定了headless参数，使用该值
+        is_headless = headless
+    elif os.environ.get("IS_DOCKER") == "true":
+        # 否则根据环境变量决定
+        is_headless = True
+    
+    if is_headless:
+        print("启用无头模式 (headless=new)")
         chrome_options.add_argument("--headless=new")
     else:
-        print("本地环境检测: 启用 GUI 模式 (可见窗口)")
-        # chrome_options.add_argument("--headless=new") # 本地开发不启用无头模式
+        print("启用 GUI 模式 (可见窗口)")
     
     # 基础配置
     chrome_options.add_argument("--no-sandbox")
