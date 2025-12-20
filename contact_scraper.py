@@ -8,6 +8,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from db import save_business_data_to_db
 from facebook_email_fetcher import extract_single_facebook_email_info
+from scraper import should_stop_extraction
 
 # 导入优化模块
 from validators.email_validator import EmailValidator
@@ -100,16 +101,44 @@ def is_valid_email(email):
 def extract_contact_info(driver, business_data_list):
     """
     优化后的联系方式提取函数
-    
-    Features:
-    - 集成 EmailValidator (Requirements 1.1, 1.2, 1.3)
-    - 集成 PhoneValidator (Requirements 1.4)
-    - 集成 URLValidator (Requirements 1.5)
-    - 集成 SmartWaitStrategy (Requirements 3.1, 3.2, 3.3)
-    - 集成 BatchProcessor (Requirements 4.1, 4.4)
-    - 集成 DataDeduplicator (Requirements 2.1, 2.2, 2.3)
     """
     total = len(business_data_list)
+    # ... (existing content logic)
+    # Actually, let's keep the core function as is and add a helper or modify the entry point.
+    # The user wants to "Enhance contact extraction feature".
+
+def extract_contacts_by_ids(driver, record_ids: list):
+    """
+    针对指定的记录 ID 列表进行定向联系方式提取
+    """
+    from db import get_db_connection, release_connection
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    placeholders = ','.join(['?' for _ in record_ids])
+    cursor.execute(f"SELECT id, name, website, city, product FROM business_records WHERE id IN ({placeholders})", record_ids)
+    
+    records = []
+    for row in cursor.fetchall():
+        records.append({
+            'id': row[0],
+            'name': row[1],
+            'website': row[2],
+            'city': row[3],
+            'product': row[4]
+        })
+    
+    cursor.close()
+    release_connection(conn)
+    
+    if not records:
+        print("未找到对应的记录", file=sys.stderr)
+        return
+
+    # 调用核心提取逻辑
+    for progress, name, data, msg in extract_contact_info(driver, records):
+        yield progress, name, data, msg
     
     # 优化：预编译正则表达式，避免重复编译
     email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
@@ -119,6 +148,11 @@ def extract_contact_info(driver, business_data_list):
     _batch_processor.clear()
     
     for i, business in enumerate(business_data_list):
+        # 检查是否应该停止
+        if should_stop_extraction():
+            print("收到停止信号，停止联系方式提取")
+            break
+            
         name = business['name']
         website = business.get('website')
         if not website:
@@ -175,45 +209,72 @@ def extract_contact_info(driver, business_data_list):
                     if mailto_match and is_valid_email(mailto_match.group(1)):
                         emails.add(mailto_match.group(1))
 
-            # 尝试点击“联系我们”或类似链接
+            # 尝试查找多个潜在的联系页面链接
             contact_keywords = [
                 'contact', '联系', 'about', '关于', 'get in touch', '联系我们',
-                'support', '帮助', 'customer service', '客户服务'
+                'support', '帮助', 'customer service', '客户服务', 'team', '团队',
+                'legal', 'imprint', 'privacy', 'terms'
             ]
-            contact_link = None
-            for keyword in contact_keywords:
-                contact_link = wait_for_element(driver, f'a[href*="{keyword}"], a:contains("{keyword}")', timeout=2)
-                if contact_link:
-                    break
-            if contact_link:
+            
+            potential_links = []
+            all_links = driver.find_elements(By.TAG_NAME, 'a')
+            for link in all_links:
                 try:
-                    print(f"找到 {name} 的联系链接: {contact_link.get_attribute('href')}")
-                    ActionChains(driver).move_to_element(contact_link).click().perform()
-                    WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.TAG_NAME, "body"))
-                    )
-                    scroll_page(driver, scroll_times=2, scroll_delay=1)
-                    contact_page_text = driver.find_element(By.TAG_NAME, "body").text
-                    contact_page_source = driver.page_source
-                    raw_emails = re.findall(email_pattern, contact_page_text) + re.findall(email_pattern, contact_page_source)
-                    print(f"{name} 联系页面原始邮箱匹配: {raw_emails}")
-                    for email in raw_emails:
+                    href = link.get_attribute('href')
+                    text = link.text.lower()
+                    if href and any(kw in href.lower() or kw in text for kw in contact_keywords):
+                        if href.startswith(website.rstrip('/')) or href.startswith('/'):
+                            if href.startswith('/'):
+                                href = website.rstrip('/') + href
+                            if href not in potential_links and href != website:
+                                potential_links.append(href)
+                except:
+                    continue
+            
+            # 限制遍历页面数量，避免陷入死循环或过度消耗资源
+            max_subpages = 3
+            for subpage_url in potential_links[:max_subpages]:
+                try:
+                    print(f"访问子页面: {subpage_url}")
+                    driver.get(subpage_url)
+                    _smart_wait.wait_for_page_load(driver, timeout=5)
+                    _smart_wait.wait_for_network_idle(driver, timeout=5)
+                    scroll_page(driver, scroll_times=1, scroll_delay=0.5)
+                    
+                    sub_text = driver.find_element(By.TAG_NAME, "body").text
+                    sub_source = driver.page_source
+                    
+                    # 提取邮箱
+                    for email in email_pattern.findall(sub_text) + email_pattern.findall(sub_source):
                         if is_valid_email(email):
                             emails.add(email)
-                    mailto_links = driver.find_elements(By.CSS_SELECTOR, 'a[href^="mailto:"]')
-                    for link in mailto_links:
-                        href = link.get_attribute('href')
-                        mailto_match = re.search(r"mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", href)
-                        if mailto_match and is_valid_email(mailto_match.group(1)):
-                            emails.add(mailto_match.group(1))
-                    print(f"从 {name} 的联系页面提取到额外信息")
+                    
+                    # 提取电话
+                    for phone in phone_pattern.findall(sub_text):
+                        if isinstance(phone, tuple): phone = phone[0]
+                        clean_phone = ''.join(c for c in phone if c.isdigit() or c == '+')
+                        if len(clean_phone) >= 8:
+                            phones.add(clean_phone)
+                            
                 except Exception as e:
-                    print(f"点击 {name} 的联系页面失败: {e}")
+                    print(f"访问子页面 {subpage_url} 失败: {e}")
+
+            # 提取电话号码（由于正则表达式可能返回元组，需要特殊处理）
+            raw_phones = phone_pattern.findall(page_text) + phone_pattern.findall(page_source)
+            for p in raw_phones:
+                if isinstance(p, tuple): p = p[0]
+                clean_phone = ''.join(c for c in p if c.isdigit() or c == '+')
+                if len(clean_phone) >= 8:
+                    phones.add(clean_phone)
 
             # 更新 business 字典
             business['emails'] = list(emails) if emails else []
+            business['phones'] = list(phones) if phones else business.get('phones', [])
+            
             if business['emails']:
                 print(f"提取到 {name} 的邮箱: {business['emails']}")
+            if business['phones']:
+                print(f"提取到 {name} 的电话: {business['phones']}")
             else:
                 print(f"未在 {name} 的网站找到邮箱")
 

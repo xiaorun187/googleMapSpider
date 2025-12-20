@@ -599,12 +599,57 @@ def extract_contacts():
                 if driver:
                     driver.quit()
 
+    def background_contact_extraction(proxy=None):
+        with app.app_context():
+            from chrome_driver import create_driver
+            driver = create_driver(headless=True, proxy=proxy)
+            try:
+                # 获取有网站但没邮箱的记录
+                from db import get_db_connection, release_connection
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT id, name, website, city, product FROM business_records WHERE website IS NOT NULL AND website != '' AND (email IS NULL OR email = '')")
+                records = [{'id': r[0], 'name': r[1], 'website': r[2], 'city': r[3], 'product': r[4]} for r in cursor.fetchall()]
+                cursor.close()
+                release_connection(conn)
+                
+                if not records:
+                    socketio.emit('progress_update', {'progress': 100, 'message': '没有需要提取联系方式的记录'})
+                    return
+
+                for progress, name, data, msg in extract_contact_info(driver, records):
+                    socketio.emit('progress_update', {
+                        'progress': progress,
+                        'message': msg,
+                        'business_data': data
+                    })
+            finally:
+                driver.quit()
+
     thread = threading.Thread(target=background_contact_extraction, args=(proxy,))
     thread.daemon = True
     thread.start()
 
     return jsonify({"status": "success", "message": "联系方式提取任务已启动..."})
 
+def background_target_contact_extraction(record_ids, proxy=None):
+    """后台定向联系方式提取"""
+    with app.app_context():
+        from chrome_driver import create_driver
+        driver = create_driver(headless=True, proxy=proxy)
+        try:
+            from contact_scraper import extract_contacts_by_ids
+            for progress, name, data, msg in extract_contacts_by_ids(driver, record_ids):
+                socketio.emit('progress_update', {
+                    'progress': progress,
+                    'message': msg,
+                    'business_data': data
+                })
+            socketio.emit('progress_update', {'progress': 100, 'message': '定向提取任务已完成'})
+        finally:
+            driver.quit()
+
+@app.route('/email')
 @app.route('/send_email_page')
 def send_email_page():
     if not session.get('logged_in'):
@@ -669,18 +714,34 @@ def get_history():
     print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', show_empty_email={show_empty_email}", file=sys.stderr)
     try:
         result = get_history_records(page, size, query, show_empty_email)
-        records = result['records']
-        total = result['total']
-        total_pages = result['total_pages']
         return jsonify({
             "status": "success",
-            "records": records,
-            "total_pages": total_pages,
-            "total": total
+            "records": result['records'],
+            "total_pages": result['total_pages'],
+            "total": result['total']
         })
     except Exception as e:
         print(f"查询历史记录失败: {e}", file=sys.stderr)
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/records/target-extract', methods=['POST'])
+def target_extract_contacts():
+    """定向对选中的记录提取联系人"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    
+    data = request.get_json()
+    record_ids = data.get('ids', [])
+    if not record_ids:
+        return jsonify({"status": "error", "message": "没有选中的记录"}), 400
+
+    # 启动后台线程进行定向爬取
+    thread = threading.Thread(target=background_target_contact_extraction, args=(record_ids,))
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({"status": "success", "message": f"已针对 {len(record_ids)} 条记录启动定向提取任务"})
 
 # 在路由部分添加
 @app.route('/update_send_count', methods=['POST'])
@@ -891,12 +952,22 @@ def batch_delete_records():
     if not record_ids:
         return jsonify({"status": "error", "message": "请选择要删除的记录"}), 400
     
-    deleted_count = _history_manager.batch_delete(record_ids)
     return jsonify({
         "status": "success", 
         "message": f"成功删除 {deleted_count} 条记录",
         "deleted_count": deleted_count
     })
+
+
+@app.route('/api/analytics/summary', methods=['GET'])
+def get_analytics_summary_api():
+    """获取系统统计摘要"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    
+    from db import get_analytics_summary
+    data = get_analytics_summary()
+    return jsonify({"status": "success", "summary": data})
 
 # ============================================================================
 # AI 配置 API (Requirements 12.5, 12.6)
