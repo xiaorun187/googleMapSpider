@@ -279,6 +279,11 @@ def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=50
     _logger.log_progress(current_link_count, target_count, f"初始链接数: {current_link_count}")
     
     for i in range(max_scrolls):
+        # 检查是否应该停止爬取
+        if should_stop_extraction():
+            print("收到停止信号，停止滚动加载")
+            break
+            
         # 记录滚动前的链接数量
         before_count = len(business_links)
         

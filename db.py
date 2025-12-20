@@ -117,10 +117,21 @@ def init_database():
                 city TEXT,
                 product TEXT,
                 send_count INTEGER DEFAULT 0,
+                send_status TEXT DEFAULT 'pending', -- pending, sent, failed
+                last_sent_at TEXT,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        
+        # 尝试为现有数据库添加新字段（如果不存在）
+        try:
+            cursor.execute("ALTER TABLE business_records ADD COLUMN send_status TEXT DEFAULT 'pending'")
+        except Error: pass # 字段已存在
+        
+        try:
+            cursor.execute("ALTER TABLE business_records ADD COLUMN last_sent_at TEXT")
+        except Error: pass # 字段已存在
         
         # 创建 ai_configurations 表
         cursor.execute("""
@@ -298,8 +309,8 @@ def save_single_business_to_db(business: dict) -> dict:
             cursor.execute("""
                 INSERT INTO business_records 
                 (unique_id, name, website, email, phones, facebook, twitter, 
-                 instagram, linkedin, whatsapp, youtube, city, product, send_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                 instagram, linkedin, whatsapp, youtube, city, product, send_count, send_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending')
             """, (unique_id, name, website, email_value, phones, facebook, 
                   twitter, instagram, linkedin, whatsapp, youtube, city, product))
             
@@ -488,7 +499,10 @@ def update_send_count(record_ids: list) -> bool:
         placeholders = ','.join(['?' for _ in record_ids])
         cursor.execute(f"""
             UPDATE business_records 
-            SET send_count = send_count + 1, updated_at = CURRENT_TIMESTAMP
+            SET send_count = send_count + 1, 
+                send_status = 'sent',
+                last_sent_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id IN ({placeholders})
         """, record_ids)
         connection.commit()
@@ -650,7 +664,7 @@ def update_business_email(record_id: int, email: str) -> bool:
         release_connection(connection)
 
 
-def delete_business_email(record_id: int) -> bool:
+def delete_business_record(record_id: int) -> bool:
     """
     删除商家记录
     
@@ -681,6 +695,105 @@ def delete_business_email(record_id: int) -> bool:
     finally:
         if cursor:
             cursor.close()
+        release_connection(connection)
+
+
+def delete_records_batch(record_ids: list) -> int:
+    """
+    批量删除商家记录
+    
+    Args:
+        record_ids: 记录ID列表
+        
+    Returns:
+        int: 成功删除的数量
+    """
+    if not record_ids:
+        return 0
+        
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return 0
+        
+        cursor = connection.cursor()
+        placeholders = ','.join(['?' for _ in record_ids])
+        cursor.execute(f"DELETE FROM business_records WHERE id IN ({placeholders})", record_ids)
+        count = cursor.rowcount
+        connection.commit()
+        print(f"[DB] 批量删除: {count} 条记录", file=sys.stderr)
+        return count
+        
+    except Error as e:
+        print(f"[DB ERROR] 批量删除失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return 0
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def add_business_record(data: dict) -> Optional[int]:
+    """
+    手动新增商家记录
+    """
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        unique_id = generate_unique_id()
+        
+        # 字段映射
+        fields = ['unique_id', 'name', 'website', 'email', 'phones', 'facebook', 'twitter', 
+                  'instagram', 'linkedin', 'whatsapp', 'youtube', 'city', 'product']
+        values = [unique_id] + [data.get(f, '') for f in fields[1:]]
+        
+        placeholders = ', '.join(['?' for _ in fields])
+        sql = f"INSERT INTO business_records ({', '.join(fields)}) VALUES ({placeholders})"
+        
+        cursor.execute(sql, values)
+        connection.commit()
+        return cursor.lastrowid
+    except Error as e:
+        print(f"[DB ERROR] 新增记录失败: {e}", file=sys.stderr)
+        return None
+    finally:
+        if cursor: cursor.close()
+        release_connection(connection)
+
+
+def update_business_record(record_id: int, data: dict) -> bool:
+    """
+    更新商家记录
+    """
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        fields = ['name', 'website', 'email', 'phones', 'facebook', 'twitter', 
+                  'instagram', 'linkedin', 'whatsapp', 'youtube', 'city', 'product']
+        
+        set_clause = ", ".join([f"{f} = ?" for f in fields])
+        values = [data.get(f, '') for f in fields] + [record_id]
+        
+        sql = f"UPDATE business_records SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        
+        cursor.execute(sql, values)
+        connection.commit()
+        return cursor.rowcount > 0
+    except Error as e:
+        print(f"[DB ERROR] 更新记录失败: {e}", file=sys.stderr)
+        return False
+    finally:
+        if cursor: cursor.close()
         release_connection(connection)
 
 
@@ -899,4 +1012,45 @@ def get_records_by_ids(record_ids: list) -> list:
     finally:
         if cursor:
             cursor.close()
+        release_connection(connection)
+
+
+def get_analytics_summary() -> dict:
+    """
+    获取系统统计摘要
+    """
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # 1. 总记录数
+        cursor.execute("SELECT COUNT(*) FROM business_records")
+        total_records = cursor.fetchone()[0]
+        
+        # 2. 有邮箱的记录数
+        cursor.execute("SELECT COUNT(*) FROM business_records WHERE email IS NOT NULL AND email != ''")
+        with_email = cursor.fetchone()[0]
+        
+        # 3. 总发送次数
+        cursor.execute("SELECT SUM(send_count) FROM business_records")
+        total_sends = cursor.fetchone()[0] or 0
+        
+        # 4. 成功发送人数 (send_status = 'sent')
+        cursor.execute("SELECT COUNT(*) FROM business_records WHERE send_status = 'sent'")
+        sent_success = cursor.fetchone()[0]
+        
+        return {
+            'total_records': total_records,
+            'with_email': with_email,
+            'email_rate': round(with_email / (total_records or 1) * 100, 1) if total_records > 0 else 0,
+            'total_sends': total_sends,
+            'sent_success': sent_success
+        }
+    except Error as e:
+        print(f"[DB ERROR] 获取统计信息失败: {e}", file=sys.stderr)
+        return {}
+    finally:
+        if cursor: cursor.close()
         release_connection(connection)

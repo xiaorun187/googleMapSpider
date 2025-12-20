@@ -1,53 +1,189 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>提取结果 - Google Maps 数据提取</title>
-    <link href="{{ url_for('static', filename='js/bootstrap.min.css') }}" rel="stylesheet">
+    <title>提取结果 - Google Maps 商家查询</title>
     <style>
-        .result-container {
-            max-width: 800px;
-            margin: 50px auto;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #1a1a2e;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 0px;
+            padding: 10px;
+            background: rgba(253, 242, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 12px;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
+        }
+
+        .header h2 {
+            font-size: 22px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 4px rgba(102, 126, 234, 0.15));
+        }
+
+        .table-card {
+            background: rgba(253, 242, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border-radius: 16px;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.1);
+            overflow: hidden;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: rgba(102, 126, 234, 0.05);
+            padding: 14px 16px;
+            text-align: left;
+            font-weight: 700;
+            color: #1a1a2e;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(102, 126, 234, 0.05);
+            color: #334155;
+        }
+
+        tr:hover td {
+            background: rgba(102, 126, 234, 0.03);
+        }
+
+        .actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            opacity: 0.95;
+        }
+
+        .alert {
+            background: rgba(254, 243, 199, 0.9);
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
         }
     </style>
 </head>
+
 <body>
-    <div class="container result-container">
-        <h2 class="text-center mb-4">提取结果</h2>
-        {% if data %}
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>名称</th>
-                        <th>地址</th>
-                        <th>营业时间</th>
-                        <th>网站</th>
-                        <th>电话</th>
-                        <th>Plus Code</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in data %}
+    <div class="container fade-in">
+        <header class="header">
+            <h2>✨ 提取结果详情</h2>
+        </header>
+
+        <div class="table-card">
+            {% if data %}
+            <div class="table-responsive">
+                <table>
+                    <thead>
                         <tr>
-                            <td>{{ item.name }}</td>
+                            <th>名称</th>
+                            <th>地址</th>
+                            <th>营业时间</th>
+                            <th>网站</th>
+                            <th>电话</th>
+                            <th>Plus Code</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data %}
+                        <tr>
+                            <td style="font-weight:600; color:#1e1e3f;">{{ item.name }}</td>
                             <td>{{ item.address or '无' }}</td>
                             <td>{{ item.hours or '无' }}</td>
                             <td>{{ item.website or '无' }}</td>
                             <td>{{ item.phone or '无' }}</td>
-                            <td>{{ item.plusCode or '无' }}</td>
+                            <td style="font-family: monospace; color:#64748b;">{{ item.plusCode or '无' }}</td>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% if csv_file %}
-                <a href="{{ url_for('download_file', filename=csv_file) }}" class="btn btn-success">下载 CSV</a>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert">未提取到数据，请检查搜索条件后重试</div>
             {% endif %}
-        {% else %}
-            <div class="alert alert-warning">未提取到数据</div>
-        {% endif %}
-        <a href="{{ url_for('operation') }}" class="btn btn-primary mt-3">返回操作页面</a>
+        </div>
+
+        <div class="actions">
+            {% if csv_file %}
+            <a href="{{ url_for('download_file', filename=csv_file) }}" class="btn btn-success">📥 下载数据 (CSV)</a>
+            {% endif %}
+            <a href="{{ url_for('operation') }}" class="btn btn-primary">🔙 返回提取中心</a>
+        </div>
     </div>
-    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
 </body>
+
 </html>
