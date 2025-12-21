@@ -167,6 +167,13 @@ def login():
             return render_template('login.html', error="用户名或密码错误")
     return render_template('login.html')
 
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+
 @app.route('/operation')
 def operation():
     if not session.get('logged_in'):
