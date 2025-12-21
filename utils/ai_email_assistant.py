@@ -125,6 +125,10 @@ class AIEmailAssistant:
                 context_info.append(f"产品/服务: {context['product']}")
             if context.get('industry'):
                 context_info.append(f"行业: {context['industry']}")
+            if context.get('file'):
+                context_info.append(f"数据文件: {context['file']}")
+            if context.get('recipient_count'):
+                context_info.append(f"收件人数量: {context['recipient_count']}")
             
             if context_info:
                 prompt += f"\n\n上下文信息:\n" + "\n".join(context_info)
@@ -155,6 +159,10 @@ class AIEmailAssistant:
                 context_info.append(f"产品/服务: {context['product']}")
             if context.get('industry'):
                 context_info.append(f"行业: {context['industry']}")
+            if context.get('file'):
+                context_info.append(f"数据文件: {context['file']}")
+            if context.get('recipient_count'):
+                context_info.append(f"收件人数量: {context['recipient_count']}")
             
             if context_info:
                 prompt += f"\n\n上下文信息:\n" + "\n".join(context_info)

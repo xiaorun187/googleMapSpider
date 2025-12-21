@@ -819,10 +819,16 @@
         showAIStatus('正在调用AI生成邮件内容...');
 
         try {
+            // 构建上下文信息
+            const context = {
+                file: csvFile,
+                recipient_count: emails.length
+            };
+            
             const res = await fetch('/api/ai/generate-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ context: {} })
+                body: JSON.stringify({ context })
             });
             const data = await res.json();
 
@@ -858,10 +864,16 @@
         showAIStatus('正在根据您的要求生成邮件...');
 
         try {
+            // 构建上下文信息
+            const context = {
+                file: csvFile,
+                recipient_count: emails.length
+            };
+            
             const res = await fetch('/api/ai/generate-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ requirements, context: {} })
+                body: JSON.stringify({ requirements, context })
             });
             const data = await res.json();
 

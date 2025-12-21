@@ -656,6 +656,8 @@ def send_email_page():
         return redirect(url_for('login'))
     return render_template('send_email.html')
 
+
+
 @app.route('/send_email', methods=['POST'])
 def send_email_route():
     if not session.get('logged_in'):
