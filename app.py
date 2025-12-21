@@ -20,6 +20,7 @@ from contact_scraper import extract_contact_info
 from utils import save_to_csv, save_to_excel
 from email_sender import EmailSender
 from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count
+from services.user_service import UserService
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -155,16 +156,60 @@ def terminate_all_tasks():
 def index():
     return redirect(url_for('login'))
 
+
+# 初始化用户服务
+user_service = UserService()
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """用户注册路由"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        # 检查密码确认
+        if password != confirm_password:
+            return render_template('register.html', error="两次输入的密码不一致", username=username)
+        
+        # 调用用户服务进行注册
+        success, message = user_service.register_user(username, password)
+        
+        if success:
+            # 注册成功后跳转到登录页面，并显示成功消息
+            return redirect(url_for('login', registered=1))
+        else:
+            return render_template('register.html', error=message, username=username)
+    
+    return render_template('register.html')
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """用户登录路由"""
+    # 检查是否是注册成功后跳转过来的
+    registered = request.args.get('registered')
+    
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        if username == 'admin' and password == PASSWORD:
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        
+        # 调用用户服务进行认证
+        auth_result = user_service.authenticate(username, password)
+        
+        if auth_result.success:
             session['logged_in'] = True
+            session['user_id'] = auth_result.user_id
+            session['username'] = auth_result.username
             return redirect(url_for('operation'))
         else:
-            return render_template('login.html', error="用户名或密码错误")
+            return render_template('login.html', error=auth_result.error_message)
+    
+    # 如果是注册成功跳转过来，显示成功消息
+    if registered:
+        return render_template('login.html', success="注册成功！请登录")
+    
     return render_template('login.html')
 
 

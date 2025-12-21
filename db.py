@@ -161,10 +161,22 @@ def init_database():
             )
         """)
         
+        # 创建 users 表（用户账号系统）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         # 创建索引
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_email ON business_records(email)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_city ON business_records(city)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_name_website ON business_records(name, website)")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         
         connection.commit()
         print("数据库初始化完成", file=sys.stderr)
