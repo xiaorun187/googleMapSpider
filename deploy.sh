@@ -59,7 +59,7 @@ build_deployment_package() {
     
     # 创建部署包，排除不必要的文件
     log_info "创建部署包..."
-    zip -r "$DEPLOY_PACKAGE" app.py requirements.txt docker-compose.yml Dockerfile docker-entrypoint.sh templates static config models utils validators *.py init_ai_config.py -x "*.git*" "*node_modules*" "*.env*" "*logs*" "*__pycache__*" "*.pyc" ".DS_Store" "*venv*" > /dev/null 2>&1
+    zip -r "$DEPLOY_PACKAGE" app.py requirements.txt docker-compose.yml Dockerfile docker-entrypoint.sh templates static config models utils validators *.py init_ai_config.py diagnose_ai_config.py server_diagnose.py -x "*.git*" "*node_modules*" "*.env*" "*logs*" "*__pycache__*" "*.pyc" ".DS_Store" "*venv*" > /dev/null 2>&1
     
     # 校验文件完整性
     if [ -f "$DEPLOY_PACKAGE" ]; then

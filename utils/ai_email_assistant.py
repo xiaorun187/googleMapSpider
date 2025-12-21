@@ -179,8 +179,16 @@ class AIEmailAssistant:
         Returns:
             EmailGenerationResult: 生成结果
         """
-        # 解密API密钥
-        api_key = AIConfiguration.decrypt_key(self._config.api_key)
+        # 注意：api_key 可能是明文（从 app.py 传入时已解密）或加密的
+        # 尝试解密，如果失败则假设已经是明文
+        api_key = self._config.api_key
+        if api_key:
+            decrypted = AIConfiguration.decrypt_key(api_key)
+            # 如果解密成功且结果不为空，使用解密后的值
+            # 否则假设传入的就是明文密钥
+            if decrypted:
+                api_key = decrypted
+        
         if not api_key:
             return EmailGenerationResult(
                 success=False,
@@ -255,7 +263,7 @@ class AIEmailAssistant:
                 self._config.api_endpoint,
                 headers=headers,
                 json=payload,
-                timeout=30  # 增加超时时间
+                timeout=60  # 增加超时时间到60秒
             )
             
             print(f"[AI] 响应状态码: {response.status_code}", file=sys.stderr)

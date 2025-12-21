@@ -9,7 +9,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 # SQLite database file path
-DB_FILE = "business.db"
+import os
+DATA_DIR = os.environ.get('DATA_DIR', 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_FILE = os.path.join(DATA_DIR, "business.db")
 
 
 @dataclass

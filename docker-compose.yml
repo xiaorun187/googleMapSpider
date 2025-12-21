@@ -7,7 +7,9 @@ services:
       - "8088:5000"  # 映射宿主机的 8088 端口到容器的 5000 端口
     volumes:
       - ./output:/app/output  # 映射 output 目录，以便持久化 CSV 文件
+      - ./data:/app/data  # 映射数据目录，以便持久化数据库文件
     environment:
       - FLASK_ENV=development  # 启用 Flask 开发模式（调试）
       - PORT=5000 # 明确告诉容器内应用监听 5000
+      - DATA_DIR=/app/data # 数据库目录
     restart: unless-stopped  # 容器意外退出时自动重启
