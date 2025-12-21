@@ -59,7 +59,7 @@ build_deployment_package() {
     
     # 创建部署包，排除不必要的文件
     log_info "创建部署包..."
-    zip -r "$DEPLOY_PACKAGE" app.py requirements.txt docker-compose.yml Dockerfile docker-entrypoint.sh templates static config models utils validators *.py -x "*.git*" "*node_modules*" "*.env*" "*logs*" "*__pycache__*" "*.pyc" ".DS_Store" "*venv*" > /dev/null 2>&1
+    zip -r "$DEPLOY_PACKAGE" app.py requirements.txt docker-compose.yml Dockerfile docker-entrypoint.sh templates static config models utils validators *.py init_ai_config.py -x "*.git*" "*node_modules*" "*.env*" "*logs*" "*__pycache__*" "*.pyc" ".DS_Store" "*venv*" > /dev/null 2>&1
     
     # 校验文件完整性
     if [ -f "$DEPLOY_PACKAGE" ]; then
@@ -146,6 +146,15 @@ server_deployment() {
     if echo "$container_status" | grep -q "Up"; then
         log_success "容器状态检查通过"
         echo "$container_status"
+        
+        # 初始化AI配置
+        log_info "初始化AI配置..."
+        if ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && python init_ai_config.py" > /dev/null 2>&1; then
+            log_success "AI配置初始化成功"
+        else
+            log_warning "AI配置初始化失败，可能需要手动配置"
+        fi
+        
         return 0
     else
         log_error "容器状态检查失败"
