@@ -992,9 +992,13 @@ def _get_ai_config_from_db() -> AIConfiguration:
         release_connection(conn)
         
         if row:
+            # 解密API密钥
+            encrypted_key = row[1] or ''
+            api_key = AIConfiguration.decrypt_key(encrypted_key) if encrypted_key else ''
+            
             return AIConfiguration(
                 api_endpoint=row[0] or '',
-                api_key=row[1] or '',  # 已加密
+                api_key=api_key,  # 解密后的密钥
                 model=row[2] or ''
             )
         return AIConfiguration()
