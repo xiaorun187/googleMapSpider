@@ -116,6 +116,7 @@ tmp/
 *~
 .vim/
 .netrwhist
+.kiro/
 
 # Jupyter Notebook
 .ipynb_checkpoints
