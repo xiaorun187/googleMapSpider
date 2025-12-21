@@ -2,7 +2,7 @@
 set -e
 
 # 确保数据目录存在
-mkdir -p /app/data /app/output
+mkdir -p /app/data /app/output /app/logs
 
 # 启动 Flask 应用
 echo "Starting Flask application..."

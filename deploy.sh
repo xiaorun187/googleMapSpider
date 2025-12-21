@@ -127,7 +127,7 @@ server_deployment() {
     
     # 创建数据目录（确保 volume 映射正常）
     log_info "创建数据目录..."
-    ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "mkdir -p $SERVER_PATH/$DEPLOY_DIR/data $SERVER_PATH/$DEPLOY_DIR/output" > /dev/null 2>&1
+    ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "mkdir -p $SERVER_PATH/$DEPLOY_DIR/data $SERVER_PATH/$DEPLOY_DIR/output $SERVER_PATH/$DEPLOY_DIR/logs" > /dev/null 2>&1
     
     # 停止旧容器
     log_info "停止旧容器..."
