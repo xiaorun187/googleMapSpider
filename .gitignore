@@ -1,61 +1,240 @@
+# ===================================
+# Python 相关
+# ===================================
+
 # 虚拟环境
 .venv/
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python 编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# 单元测试 / 覆盖率报告
+.pytest_cache/
+.coverage
+.pycoverage
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+htmlcov/
+.tox/
+.nox/
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# ===================================
+# 环境配置文件
+# ===================================
+
+# 环境变量
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*.local
+
+# 配置文件
+config.ini
+config.local.*
+secrets.yaml
+secrets.json
+
+# ===================================
+# 项目特定文件
+# ===================================
 
 # 输出目录
 output/
+results/
+exports/
+downloads/
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
 
 # 日志文件
 logs/
 *.log
 *.log.*
+log/
 
-# Python编译文件
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.so
+# 临时文件
+*.tmp
+*.temp
+temp/
+tmp/
 
-# 环境配置文件
-.env
-.env.local
-.env.*.local
-.env.production
-.env.development
+# ===================================
+# IDE 与编辑器
+# ===================================
 
-# 操作系统文件
-.DS_Store
-Thumbs.db
-
-# IDE配置文件
+# IDE 配置文件
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+.vim/
+.netrwhist
 
-# 测试相关
-.pytest_cache/
-.tox/
-.coverage
-coverage.xml
-htmlcov/
+# Jupyter Notebook
+.ipynb_checkpoints
 
-# Docker相关
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# ===================================
+# 操作系统
+# ===================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ===================================
+# 容器化与部署
+# ===================================
+
+# Docker
 .dockerignore
+docker-compose.override.yml
+
+# Kubernetes
+*.kubeconfig
+
+# ===================================
+# 压缩文件与备份
+# ===================================
 
 # 压缩文件
 *.zip
 *.tar.gz
 *.rar
+*.7z
+*.dmg
+*.pkg
+*.deb
+*.rpm
 
-# 数据库文件
-*.db
-*.sqlite3
+# 备份文件
+*.bak
+*.backup
+*.old
 
-# 临时文件
-*.tmp
-*.temp
-.cache/
+# ===================================
+# 网络爬虫特定
+# ===================================
+
+# WebDriver
+chromedriver*
+geckodriver*
+phantomjs*
+
+# 爬虫数据
+scrapy_data/
+crawled_data/
+raw_data/
+
+# 浏览器配置
+browser_data/
+chrome_profile/
+firefox_profile/
+
+# ===================================
+# AI/机器学习
+# ===================================
+
+# 模型文件
+*.pkl
+*.pickle
+*.h5
+*.pb
+*.model
+
+# 数据集
+datasets/
+data/raw/
+data/processed/
+
+# ===================================
+# 其他
+# ===================================
+
+# SSL 证书
+*.pem
+*.key
+*.crt
+*.csr
+
+# 本地开发
+local/
+dev/
+debug/
+
+# 性能分析
+*.prof
+*.profile
