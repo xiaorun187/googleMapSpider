@@ -28,7 +28,7 @@ else:  # Linux/Mac
         CHROMEDRIVER_PATH = os.environ.get('CHROMEDRIVER_PATH', "/usr/local/bin/chromedriver")
 # 数据库配置
 # 项目使用SQLite数据库，无需额外配置
-# 数据库文件路径: business.db (在项目根目录)
+# 数据库文件路径: data/business.db
 # 创建输出目录
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)

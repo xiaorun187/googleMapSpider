@@ -955,6 +955,9 @@ def batch_delete_records():
     if not record_ids:
         return jsonify({"status": "error", "message": "请选择要删除的记录"}), 400
     
+    from db import delete_records_batch
+    deleted_count = delete_records_batch(record_ids)
+    
     return jsonify({
         "status": "success", 
         "message": f"成功删除 {deleted_count} 条记录",
@@ -1164,6 +1167,6 @@ def proxy_gemini_api():
         # 处理其他未知错误
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     # 使用 socketio.run 启动，支持 WebSocket
     socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)

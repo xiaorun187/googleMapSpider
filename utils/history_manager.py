@@ -2,6 +2,7 @@
 HistoryManager - 历史数据管理模块
 实现分页查询、记录创建、更新、删除和数据验证
 """
+import os
 import sys
 import sqlite3
 from typing import List, Tuple, Optional, Dict, Any
@@ -24,7 +25,7 @@ class HistoryManager:
     - 数据验证
     """
     
-    DB_FILE = "business.db"
+    DB_FILE = os.path.join(os.environ.get('DATA_DIR', 'data'), "business.db")
     
     def __init__(self, db_file: str = None):
         """

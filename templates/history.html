@@ -782,8 +782,21 @@
 
         async function deleteRecord(id) {
             if (!confirm('确定要删除这条记录吗？')) return;
-            const res = await fetch(`/api/records/${id}`, { method: 'DELETE' });
-            if ((await res.json()).status === 'success') loadData();
+            try {
+                const res = await fetch(`/api/records/${id}`, { 
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    loadData();
+                } else {
+                    alert(data.message || '删除失败');
+                }
+            } catch (e) {
+                console.error('删除失败:', e);
+                alert('删除请求失败');
+            }
         }
 
         // Batch Actions
