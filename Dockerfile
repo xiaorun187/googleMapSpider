@@ -82,6 +82,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 只有这里变更时，才会重新构建这一层，前面的所有层都会复用缓存
 COPY . .
 
+# 创建数据目录
+RUN mkdir -p /app/data /app/output
+
 # 设置启动脚本权限
 RUN chmod +x docker-entrypoint.sh
 

@@ -59,8 +59,7 @@ build_deployment_package() {
     
     # 创建部署包，排除不必要的文件
     log_info "创建部署包..."
-    zip -r "$DEPLOY_PACKAGE" . -x "*.git*" "*node_modules*" "*.env*" "*logs*" "*__pycache__*" "*.pyc" ".DS_Store" "*venv*" > /dev/null 2>&1
-    
+    zip -r google-maps-spider.zip . -x@.gitignore > /dev/null 2>&1
     # 校验文件完整性
     if [ -f "$DEPLOY_PACKAGE" ]; then
         file_size=$(ls -lh "$DEPLOY_PACKAGE" | awk '{print $5}')
@@ -125,6 +124,10 @@ server_deployment() {
         log_error "部署包解压失败"
         return 1
     fi
+    
+    # 创建数据目录（确保 volume 映射正常）
+    log_info "创建数据目录..."
+    ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "mkdir -p $SERVER_PATH/$DEPLOY_DIR/data $SERVER_PATH/$DEPLOY_DIR/output" > /dev/null 2>&1
     
     # 停止旧容器
     log_info "停止旧容器..."

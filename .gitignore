@@ -90,6 +90,7 @@ downloads/
 *.sqlite3
 *.db-shm
 *.db-wal
+data/
 
 # 日志文件
 logs/
