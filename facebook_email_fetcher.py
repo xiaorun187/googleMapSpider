@@ -49,7 +49,8 @@ def extract_business_info(proxy, facebook_url, business_id):
         time.sleep(5)  # 等待页面加载完成，可以适当调整
 
         page_source = driver.page_source
-        email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+        # 排除常见图片扩展名
+        email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?<!\.png)(?<!\.jpg)(?<!\.jpeg)(?<!\.gif)(?<!\.webp)"
         emails = re.findall(email_pattern, page_source)
 
         if emails:

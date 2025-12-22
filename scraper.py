@@ -18,6 +18,7 @@ from utils.data_integrity_validator import DataIntegrityValidator
 import json
 import os
 from datetime import datetime
+import re
 
 # 初始化全局组件
 _logger = StructuredLogger(log_dir='logs')
@@ -497,11 +498,26 @@ def extract_business_detail_with_retry(driver, link_href, max_retries=3):
             _smart_wait.wait_for_network_idle(driver, timeout=8)
             
             # 等待商家名称元素出现
-            name_elem = _smart_wait.wait_for_element(driver, 'h1.DUwDvf', timeout=10)
-            if not name_elem:
-                raise Exception("未找到商家名称元素")
-            
-            current_name = name_elem.text.strip()
+            # 优化：增强名称提取策略，增加 fallback
+            try:
+                name_elem = _smart_wait.wait_for_element(driver, 'h1.DUwDvf', timeout=10)
+                if name_elem:
+                    current_name = name_elem.text.strip()
+                else:
+                    raise Exception("Element not found")
+            except Exception:
+                # Fallback: 尝试从页面标题提取 (通常格式为 "Name - Google Maps")
+                page_title = driver.title
+                if " - Google Maps" in page_title:
+                    current_name = page_title.split(" - Google Maps")[0].strip()
+                else:
+                    # 最后尝试：查找任何 h1
+                    h1s = driver.find_elements(By.TAG_NAME, "h1")
+                    if h1s:
+                        current_name = h1s[0].text.strip()
+                    else:
+                        raise Exception("无法提取商家名称")
+
             if not current_name:
                 raise Exception("商家名称为空")
             
@@ -531,12 +547,10 @@ def extract_business_detail_with_retry(driver, link_href, max_retries=3):
                 'button[data-item-id^="phone"], div[aria-label*="Phone:"]', 
                 timeout=3
             )
+            
+            phone_text_found = ""
             if phone_elem:
-                phone_text = phone_elem.text.strip()
-                if phone_text:
-                    phone = ''.join(c for c in phone_text if c.isdigit() or c == '+')
-                    if len(phone) >= 8:
-                        business_data['phones'].append(phone)
+                phone_text_found = phone_elem.text.strip()
             else:
                 # 备用选择器
                 backup_phone_elem = _smart_wait.wait_for_element(
@@ -545,12 +559,25 @@ def extract_business_detail_with_retry(driver, link_href, max_retries=3):
                     timeout=2
                 )
                 if backup_phone_elem:
-                    phone_text = backup_phone_elem.text.strip()
-                    if phone_text:
-                        phone = ''.join(c for c in phone_text if c.isdigit() or c == '+')
-                        if len(phone) >= 8:
-                            business_data['phones'].append(phone)
+                    phone_text_found = backup_phone_elem.text.strip()
             
+            # 使用正则清洗和提取电话号码，提高精准度
+            if phone_text_found:
+                # 匹配格式如: +1 234-567-8900, (02) 1234 5678, 0912 345 678
+                # 至少包含7位数字
+                found_phones = re.findall(r'(?:\+?\d{1,3}[- ]?)?\(?\d{2,4}\)?[- ]?\d{3,4}[- ]?\d{3,4}', phone_text_found)
+                if found_phones:
+                    # 再次过滤，确保去除太短的匹配
+                    valid_phones = [p for p in found_phones if len(re.sub(r'\D', '', p)) >= 7]
+                    if valid_phones:
+                        # 通常取最长的一个或者是第一个
+                        business_data['phones'].extend(valid_phones)
+                else:
+                     # Fallback: 保留原来的简单清洗逻辑作为兜底
+                     simple_phone = ''.join(c for c in phone_text_found if c.isdigit() or c == '+')
+                     if len(simple_phone) >= 8:
+                         business_data['phones'].append(simple_phone)
+
             business_data['phones'] = list(set(business_data['phones']))
             
             # 记录成功

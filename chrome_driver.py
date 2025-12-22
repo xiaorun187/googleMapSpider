@@ -224,6 +224,9 @@ def get_chrome_driver(proxy=None, headless=None):
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     
+    # 强制设置语言为英语 (US)，确保 selectors (如 aria-label="Website") 始终匹配
+    chrome_options.add_argument("--lang=en-US")
+    
     # 决定是否启用无头模式
     is_headless = False
     if headless is not None:

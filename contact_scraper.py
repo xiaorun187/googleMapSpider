@@ -104,9 +104,38 @@ def extract_contact_info(driver, business_data_list):
     """
     total = len(business_data_list)
     
-    # 优化：预编译正则表达式，避免重复编译
-    email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+    # 优化：更严格的邮箱正则，且排除常见图片/文件扩展名
+    # 模式解释：
+    # 1. 用户名部分: [a-zA-Z0-9._%+-]+
+    # 2. @ 符号
+    # 3. 域名部分: [a-zA-Z0-9.-]+
+    # 4. 顶级域名: \.[a-zA-Z]{2,}
+    # 5. 负向断言 (?!...): 排除以 .png, .jpg 等结尾的匹配
+    email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?<!\.png)(?<!\.jpg)(?<!\.jpeg)(?<!\.gif)(?<!\.webp)(?<!\.svg)(?<!\.bmp)(?<!\.css)(?<!\.js)")
+    
     phone_pattern = re.compile(r"(\+?\d{1,4}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4,6}|\d{8,14}")
+
+    def is_junk_email(email):
+        """过滤垃圾邮箱和误判"""
+        email = email.lower()
+        # 1. 过滤常见占位符
+        junk_users = ['example', 'domain', 'email', 'user', 'name', 'test', 'admin']
+        user_part = email.split('@')[0]
+        if user_part in junk_users:
+            return True
+            
+        # 2. 再次检查扩展名（以防正则漏网）
+        junk_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.css', '.js', '.woff', '.ttf', '.io'] # .io 有时是域名，需谨慎，但在 css context 中常见
+        # 这里只过滤非域名的扩展名误判，.io 保留
+        file_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.css', '.js', '.woff', '.ttf']
+        if any(email.endswith(ext) for ext in file_extensions):
+            return True
+            
+        # 3. 过滤过长或过短的
+        if len(email) > 50 or len(email) < 6:
+            return True
+            
+        return False
     
     # 重置批量处理器
     _batch_processor.clear()
@@ -182,8 +211,8 @@ def extract_contact_info(driver, business_data_list):
             # 从文本和源代码提取邮箱
             raw_emails = email_pattern.findall(page_text) + email_pattern.findall(page_source)
             for email in raw_emails:
-                if is_valid_email(email):
-                    emails.add(email)
+                if is_valid_email(email) and not is_junk_email(email):
+                    emails.add(email.lower())  # 统一转小写
 
             # 从 mailto 链接提取邮箱
             mailto_links = driver.find_elements(By.CSS_SELECTOR, 'a[href^="mailto:"]')
@@ -191,8 +220,10 @@ def extract_contact_info(driver, business_data_list):
                 href = link.get_attribute('href')
                 if href:
                     mailto_match = re.search(r"mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", href)
-                    if mailto_match and is_valid_email(mailto_match.group(1)):
-                        emails.add(mailto_match.group(1))
+                    if mailto_match:
+                        email_candidate = mailto_match.group(1)
+                        if is_valid_email(email_candidate) and not is_junk_email(email_candidate):
+                            emails.add(email_candidate.lower())
 
             # 尝试查找多个潜在的联系页面链接
             contact_keywords = [
@@ -231,8 +262,8 @@ def extract_contact_info(driver, business_data_list):
                     
                     # 提取邮箱
                     for email in email_pattern.findall(sub_text) + email_pattern.findall(sub_source):
-                        if is_valid_email(email):
-                            emails.add(email)
+                        if is_valid_email(email) and not is_junk_email(email):
+                            emails.add(email.lower())
                     
                     # 提取电话
                     for phone in phone_pattern.findall(sub_text):
