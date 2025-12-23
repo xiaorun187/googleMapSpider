@@ -59,7 +59,7 @@ build_deployment_package() {
     
     # 创建部署包，排除不必要的文件
     log_info "创建部署包..."
-    zip -r google-maps-spider.zip . -x@.gitignore > /dev/null 2>&1
+    git archive --format=zip --output=google-maps-spider.zip HEAD > /dev/null 2>&1
     # 校验文件完整性
     if [ -f "$DEPLOY_PACKAGE" ]; then
         file_size=$(ls -lh "$DEPLOY_PACKAGE" | awk '{print $5}')

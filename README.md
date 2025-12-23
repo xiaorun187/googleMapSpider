@@ -148,16 +148,16 @@ curl -I http://localhost:8088/login
 #### 1. 本地准备
 ```bash
 # 生成部署包（自动排除无关文件）
-zip -r google-maps-spider.zip app.py requirements.txt docker-compose.yml Dockerfile docker-entrypoint.sh templates static config models utils validators *.py -x "*.git*" "*node_modules*" "*.env*" "*logs*" "*__pycache__*" "*.pyc" ".DS_Store" "*venv*"
+git archive --format=zip --output=google-maps-spider.zip HEAD 
 ```
 
 #### 2. 上传到服务器
 ```bash
 # 上传部署包
-scp google-maps-spider.zip root@<服务器IP>:/opt/
+scp google-maps-spider.zip root@155.138.226.211:/opt/
 
 # 登录服务器
-ssh root@<服务器IP>
+ssh root@155.138.226.211
 ```
 
 #### 3. 服务器部署

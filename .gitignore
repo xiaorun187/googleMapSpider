@@ -2,16 +2,27 @@
 # Python 相关
 # ===================================
 
+# Git 版本库
+.git/
+.git/*
+
 # 虚拟环境
 .venv/
+.venv/*
 venv/
+venv/*
 env/
+env/*
 ENV/
+ENV/*
 env.bak/
+env.bak/*
 venv.bak/
+venv.bak/*
 
 # Python 编译文件
 __pycache__/
+__pycache__/*
 *.py[cod]
 *$py.class
 *.so
@@ -41,13 +52,16 @@ MANIFEST
 
 # 单元测试 / 覆盖率报告
 .pytest_cache/
+.pytest_cache/*
 .coverage
 .pycoverage
 coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
+.hypothesis/*
 htmlcov/
+htmlcov/*
 .tox/
 .nox/
 .cache/
@@ -94,9 +108,11 @@ data/
 
 # 日志文件
 logs/
+logs/*
 *.log
 *.log.*
 log/
+log/*
 
 # 临时文件
 *.tmp
@@ -110,7 +126,9 @@ tmp/
 
 # IDE 配置文件
 .idea/
+.idea/*
 .vscode/
+.vscode/*
 *.swp
 *.swo
 *~
