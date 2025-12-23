@@ -24,8 +24,8 @@ def scraper_facebook_email(proxy):
     # 从数据库返回邮箱为空，且有 facebook URL 的记录
     result = get_facebook_non_email()
     for r in result:
-        facebook_url = r[1]
-        business_id = r[0]  # 获取 business ID
+        facebook_url = r.get('facebook')
+        business_id = r.get('id')  # 获取 business ID
         if facebook_url and business_id:
             extract_business_info(proxy, facebook_url=facebook_url, business_id=business_id)
         else:

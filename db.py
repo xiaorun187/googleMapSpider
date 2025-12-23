@@ -463,7 +463,7 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
         data_sql = f"""
             SELECT id, unique_id, name, website, email, phones, facebook, twitter,
                    instagram, linkedin, whatsapp, youtube, city, product, send_count,
-                   updated_at, created_at
+                   send_status, last_sent_at, updated_at, created_at
             FROM business_records
             {where_clause}
             ORDER BY created_at DESC
@@ -473,7 +473,7 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
         
         columns = ['id', 'unique_id', 'name', 'website', 'email', 'phones', 'facebook',
                    'twitter', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'city',
-                   'product', 'send_count', 'updated_at', 'created_at']
+                   'product', 'send_count', 'send_status', 'last_sent_at', 'updated_at', 'created_at']
         
         for row in cursor.fetchall():
             record = dict(zip(columns, row))
@@ -489,17 +489,17 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
     return result
 
 
-def update_send_count(record_ids: list) -> bool:
+def update_send_count(emails: list) -> bool:
     """
-    更新发送次数
+    根据邮箱地址更新发送次数
     
     Args:
-        record_ids: 记录ID列表
+        emails: 邮箱地址列表
         
     Returns:
         bool: 是否成功
     """
-    if not record_ids:
+    if not emails:
         return False
     
     connection = None
@@ -511,21 +511,67 @@ def update_send_count(record_ids: list) -> bool:
             return False
         
         cursor = connection.cursor()
-        placeholders = ','.join(['?' for _ in record_ids])
+        placeholders = ','.join(['?' for _ in emails])
         cursor.execute(f"""
             UPDATE business_records 
             SET send_count = send_count + 1, 
                 send_status = 'sent',
                 last_sent_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id IN ({placeholders})
-        """, record_ids)
+            WHERE email IN ({placeholders})
+        """, emails)
         connection.commit()
-        print(f"[DB] 更新发送次数: {len(record_ids)} 条记录", file=sys.stderr)
-        return True
+        updated_count = cursor.rowcount
+        print(f"[DB] 更新发送次数: {updated_count} 条记录 (邮箱: {emails})", file=sys.stderr)
+        return updated_count > 0
         
     except Error as e:
         print(f"[DB ERROR] 更新发送次数失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def update_send_failed(emails: list) -> bool:
+    """
+    根据邮箱地址更新发送状态为失败
+    
+    Args:
+        emails: 邮箱地址列表
+        
+    Returns:
+        bool: 是否成功
+    """
+    if not emails:
+        return False
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return False
+        
+        cursor = connection.cursor()
+        placeholders = ','.join(['?' for _ in emails])
+        cursor.execute(f"""
+            UPDATE business_records 
+            SET send_status = 'failed',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE email IN ({placeholders})
+        """, emails)
+        connection.commit()
+        updated_count = cursor.rowcount
+        print(f"[DB] 更新发送失败状态: {updated_count} 条记录 (邮箱: {emails})", file=sys.stderr)
+        return updated_count > 0
+        
+    except Error as e:
+        print(f"[DB ERROR] 更新发送失败状态失败: {e}", file=sys.stderr)
         if connection:
             connection.rollback()
         return False
@@ -964,14 +1010,14 @@ def get_all_business_records() -> list:
         cursor.execute("""
             SELECT id, unique_id, name, website, email, phones, facebook, twitter,
                    instagram, linkedin, whatsapp, youtube, city, product, send_count,
-                   updated_at, created_at
+                   send_status, last_sent_at, updated_at, created_at
             FROM business_records
             ORDER BY created_at DESC
         """)
         
         columns = ['id', 'unique_id', 'name', 'website', 'email', 'phones', 'facebook',
                    'twitter', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'city',
-                   'product', 'send_count', 'updated_at', 'created_at']
+                   'product', 'send_count', 'send_status', 'last_sent_at', 'updated_at', 'created_at']
         
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
         
@@ -1010,14 +1056,14 @@ def get_records_by_ids(record_ids: list) -> list:
         cursor.execute(f"""
             SELECT id, unique_id, name, website, email, phones, facebook, twitter,
                    instagram, linkedin, whatsapp, youtube, city, product, send_count,
-                   updated_at, created_at
+                   send_status, last_sent_at, updated_at, created_at
             FROM business_records
             WHERE id IN ({placeholders})
         """, record_ids)
         
         columns = ['id', 'unique_id', 'name', 'website', 'email', 'phones', 'facebook',
                    'twitter', 'instagram', 'linkedin', 'whatsapp', 'youtube', 'city',
-                   'product', 'send_count', 'updated_at', 'created_at']
+                   'product', 'send_count', 'send_status', 'last_sent_at', 'updated_at', 'created_at']
         
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
         

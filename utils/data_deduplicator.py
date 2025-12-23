@@ -122,7 +122,10 @@ class DataDeduplicator:
             whatsapp=base.whatsapp or other.whatsapp,
             youtube=base.youtube or other.youtube,
             city=base.city or other.city,
+            product=base.product or other.product,
             send_count=max(base.send_count, other.send_count),
+            send_status=base.send_status if base.send_status == 'sent' else other.send_status,
+            last_sent_at=base.last_sent_at or other.last_sent_at,
             created_at=base.created_at or other.created_at,
             updated_at=base.updated_at or other.updated_at
         )

@@ -75,7 +75,7 @@ class HistoryManager:
             sql = """
                 SELECT id, name, website, email, phones, facebook, twitter, 
                        instagram, linkedin, whatsapp, youtube, city, product, send_count, 
-                       updated_at, created_at
+                       send_status, last_sent_at, updated_at, created_at
                 FROM business_records
                 WHERE 1=1
             """
@@ -299,7 +299,7 @@ class HistoryManager:
             cursor.execute("""
                 SELECT id, name, website, email, phones, facebook, twitter, 
                        instagram, linkedin, whatsapp, youtube, city, product, send_count, 
-                       updated_at, created_at
+                       send_status, last_sent_at, updated_at, created_at
                 FROM business_records
                 WHERE id = ?
             """, (record_id,))

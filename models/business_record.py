@@ -29,6 +29,8 @@ class BusinessRecord:
         city: 城市字段
         product: 商品名/搜索关键词字段
         send_count: 发送次数
+        send_status: 发送状态 (pending/sent/failed)
+        last_sent_at: 最后发送时间
         created_at: 创建时间
         updated_at: 更新时间
     
@@ -50,6 +52,8 @@ class BusinessRecord:
     city: Optional[str] = None  # 城市字段
     product: Optional[str] = None  # 商品名/搜索关键词字段
     send_count: int = 0
+    send_status: str = 'pending'  # pending/sent/failed
+    last_sent_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     
@@ -100,6 +104,8 @@ class BusinessRecord:
             city=data.get('city'),
             product=data.get('product'),
             send_count=data.get('send_count', 0),
+            send_status=data.get('send_status', 'pending'),
+            last_sent_at=data.get('last_sent_at'),
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at')
         )
@@ -165,6 +171,8 @@ class BusinessRecord:
             city=self.city or other.city,
             product=self.product or other.product,
             send_count=max(self.send_count, other.send_count),
+            send_status=self.send_status if self.send_status == 'sent' else other.send_status,
+            last_sent_at=self.last_sent_at or other.last_sent_at,
             created_at=self.created_at or other.created_at,
             updated_at=datetime.now().isoformat()
         )

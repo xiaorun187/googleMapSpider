@@ -19,7 +19,7 @@ from scraper import extract_business_info
 from contact_scraper import extract_contact_info
 from utils import save_to_csv, save_to_excel
 from email_sender import EmailSender
-from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count
+from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count, update_send_failed
 from services.user_service import UserService
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -651,7 +651,22 @@ def extract_contacts():
                 if driver:
                     driver.quit()
 
-    def background_contact_extraction(proxy=None):
+    thread = threading.Thread(target=background_contact_extraction, args=(proxy,))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({"status": "success", "message": "联系方式提取任务已启动..."})
+
+
+@app.route('/extract_contacts_from_db', methods=['POST'])
+def extract_contacts_from_db():
+    """从数据库中提取没有邮箱的记录的联系方式"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+
+    proxy = request.form.get('proxy')
+
+    def background_db_contact_extraction(proxy=None):
         with app.app_context():
             from chrome_driver import get_chrome_driver as create_driver
             driver, proxy_info = create_driver(proxy=proxy, headless=True)
@@ -678,11 +693,11 @@ def extract_contacts():
             finally:
                 driver.quit()
 
-    thread = threading.Thread(target=background_contact_extraction, args=(proxy,))
+    thread = threading.Thread(target=background_db_contact_extraction, args=(proxy,))
     thread.daemon = True
     thread.start()
 
-    return jsonify({"status": "success", "message": "联系方式提取任务已启动..."})
+    return jsonify({"status": "success", "message": "数据库联系方式提取任务已启动..."})
 
 def background_target_contact_extraction(record_ids, proxy=None):
     """后台定向联系方式提取"""
@@ -728,6 +743,8 @@ def send_email_route():
     if success:
         return jsonify({"status": "success", "message": message})
     else:
+        # 发送失败时更新状态为 failed
+        update_send_failed([recipient])
         return jsonify({"status": "error", "message": message})
 
 # 可选：保留此接口供手动保存，但在此场景下无需前端调用
@@ -767,7 +784,7 @@ def get_history():
     show_empty_email = request.args.get('show_empty_email', 'false').lower() == 'true'  # 获取筛选参数，默认为 false
     print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', show_empty_email={show_empty_email}", file=sys.stderr)
     try:
-        result = get_history_records(page, size, query, show_empty_email)
+        result = get_history_records(page=page, per_page=size, search=query, show_empty_email=show_empty_email)
         return jsonify({
             "status": "success",
             "records": result['records'],
@@ -836,7 +853,8 @@ def export_excel():
         ]
 
         # 查询记录（不分页，获取所有匹配的记录）
-        records, _ = get_history_records(page=1, size=999999, query=query, show_empty_email=show_empty_email)
+        result = get_history_records(page=1, per_page=999999, search=query, show_empty_email=show_empty_email)
+        records = result['records']
 
         if not records:
             return jsonify({"status": "error", "message": "没有可导出的记录"}), 404
