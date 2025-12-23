@@ -58,16 +58,57 @@ build_deployment_package() {
     fi
     
     # 创建部署包，排除不必要的文件
-    log_info "创建部署包..."
-    git archive --format=zip --output=google-maps-spider.zip HEAD > /dev/null 2>&1
-    # 校验文件完整性
-    if [ -f "$DEPLOY_PACKAGE" ]; then
-        file_size=$(ls -lh "$DEPLOY_PACKAGE" | awk '{print $5}')
-        log_success "部署包创建成功: $DEPLOY_PACKAGE (大小: $file_size)"
-        return 0
+    log_info "创建部署包 (排除大文件和缓存)..."
+    
+    # 使用 git archive 创建部署包（自动排除 .gitignore 中的文件）
+    if git archive --format=zip --output="$DEPLOY_PACKAGE" HEAD; then
+        # 校验文件完整性
+        if [ -f "$DEPLOY_PACKAGE" ]; then
+            file_size=$(ls -lh "$DEPLOY_PACKAGE" | awk '{print $5}')
+            file_count=$(unzip -l "$DEPLOY_PACKAGE" 2>/dev/null | tail -1 | awk '{print $2}')
+            log_success "部署包创建成功: $DEPLOY_PACKAGE"
+            log_info "  - 大小: $file_size"
+            log_info "  - 文件数: $file_count"
+            return 0
+        else
+            log_error "部署包创建失败"
+            return 1
+        fi
     else
-        log_error "部署包创建失败"
-        return 1
+        log_error "git archive 命令执行失败"
+        
+        # 备用方案：使用 zip 命令
+        log_info "尝试使用 zip 命令创建部署包..."
+        zip -r "$DEPLOY_PACKAGE" . \
+            -x "*.git*" \
+            -x "*venv*" \
+            -x "*.venv*" \
+            -x "*__pycache__*" \
+            -x "*.pyc" \
+            -x "*node_modules*" \
+            -x "*.db" \
+            -x "*.db-*" \
+            -x "*htmlcov*" \
+            -x "*.coverage*" \
+            -x "*logs/*" \
+            -x "*output/*" \
+            -x "*progress/*" \
+            -x "*.hypothesis*" \
+            -x "*.pytest_cache*" \
+            -x "*.idea*" \
+            -x "*.vscode*" \
+            -x "*.trae*" \
+            -x "*.DS_Store" \
+            > /dev/null 2>&1
+        
+        if [ -f "$DEPLOY_PACKAGE" ]; then
+            file_size=$(ls -lh "$DEPLOY_PACKAGE" | awk '{print $5}')
+            log_success "部署包创建成功 (zip): $DEPLOY_PACKAGE (大小: $file_size)"
+            return 0
+        else
+            log_error "部署包创建失败"
+            return 1
+        fi
     fi
 }
 
@@ -77,74 +118,152 @@ transfer_deployment_package() {
     
     # 获取本地文件大小
     local_size=$(ls -l "$DEPLOY_PACKAGE" | awk '{print $5}')
-    log_info "本地文件大小: $local_size 字节"
+    local_size_human=$(ls -lh "$DEPLOY_PACKAGE" | awk '{print $5}')
+    log_info "本地文件大小: $local_size 字节 ($local_size_human)"
     
-    # 传输部署包
-    log_info "传输部署包到服务器..."
-    if scp -P 22 "$DEPLOY_PACKAGE" "$SERVER_USER@$SERVER_IP:$SERVER_PATH/" > /dev/null 2>&1; then
-        log_success "部署包传输成功"
+    # 计算本地文件MD5校验和
+    if command -v md5sum &> /dev/null; then
+        local_md5=$(md5sum "$DEPLOY_PACKAGE" | awk '{print $1}')
+    else
+        local_md5=$(md5 -q "$DEPLOY_PACKAGE")
+    fi
+    log_info "本地文件MD5: $local_md5"
+    
+    # 传输部署包 - 增加超时和压缩选项
+    log_info "传输部署包到服务器 (使用压缩传输)..."
+    
+    # 最多重试3次
+    max_retries=3
+    retry_count=0
+    
+    while [ $retry_count -lt $max_retries ]; do
+        retry_count=$((retry_count + 1))
+        log_info "传输尝试 $retry_count/$max_retries..."
         
-        # 验证服务器上的文件
-        log_info "验证服务器上的文件..."
-        remote_info=$(ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "ls -l $SERVER_PATH/$DEPLOY_PACKAGE" 2>/dev/null)
-        
-        if [ $? -eq 0 ]; then
-            log_success "服务器文件验证成功"
+        # 使用 -C 启用压缩，-o 设置超时选项
+        if scp -C -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            "$DEPLOY_PACKAGE" "$SERVER_USER@$SERVER_IP:$SERVER_PATH/"; then
             
-            # 获取远程文件大小
-            remote_size=$(echo "$remote_info" | awk '{print $5}')
+            log_success "部署包传输完成"
             
-            # 比较文件大小
-            if [ "$local_size" = "$remote_size" ]; then
-                log_success "文件大小校验通过: $remote_size 字节"
-                return 0
+            # 验证服务器上的文件
+            log_info "验证服务器上的文件..."
+            remote_info=$(ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "ls -l $SERVER_PATH/$DEPLOY_PACKAGE" 2>/dev/null)
+            
+            if [ $? -eq 0 ]; then
+                # 获取远程文件大小
+                remote_size=$(echo "$remote_info" | awk '{print $5}')
+                
+                # 比较文件大小
+                if [ "$local_size" = "$remote_size" ]; then
+                    log_success "文件大小校验通过: $remote_size 字节"
+                    
+                    # 验证MD5校验和
+                    log_info "验证MD5校验和..."
+                    remote_md5=$(ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "md5sum $SERVER_PATH/$DEPLOY_PACKAGE 2>/dev/null | awk '{print \$1}'" 2>/dev/null)
+                    
+                    if [ "$local_md5" = "$remote_md5" ]; then
+                        log_success "MD5校验通过: $remote_md5"
+                        return 0
+                    else
+                        log_warning "MD5校验失败 - 本地: $local_md5, 远程: $remote_md5"
+                        # 删除损坏的文件
+                        ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "rm -f $SERVER_PATH/$DEPLOY_PACKAGE" 2>/dev/null
+                    fi
+                else
+                    log_warning "文件大小不匹配 - 本地: $local_size, 远程: $remote_size"
+                    # 删除不完整的文件
+                    ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "rm -f $SERVER_PATH/$DEPLOY_PACKAGE" 2>/dev/null
+                fi
             else
-                log_warning "文件大小不匹配 - 本地: $local_size, 远程: $remote_size"
-                return 1
+                log_error "无法验证服务器上的文件"
             fi
         else
-            log_error "无法验证服务器上的文件"
-            return 1
+            log_warning "传输失败，准备重试..."
         fi
-    else
-        log_error "部署包传输失败"
-        return 1
-    fi
+        
+        if [ $retry_count -lt $max_retries ]; then
+            log_info "等待5秒后重试..."
+            sleep 5
+        fi
+    done
+    
+    log_error "部署包传输失败，已重试 $max_retries 次"
+    return 1
 }
 
 # 步骤3: 服务器端部署流程
 server_deployment() {
     log_info "步骤3: 服务器端部署流程"
     
+    # 先备份现有数据目录
+    log_info "备份现有数据目录..."
+    ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "
+        if [ -d $SERVER_PATH/$DEPLOY_DIR/data ]; then
+            cp -r $SERVER_PATH/$DEPLOY_DIR/data $SERVER_PATH/data_backup_\$(date +%Y%m%d_%H%M%S)
+            echo '数据目录已备份'
+        fi
+    "
+    
     # 解压部署包
     log_info "解压部署包..."
-    if ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH && unzip -o $DEPLOY_PACKAGE -d $DEPLOY_DIR" > /dev/null 2>&1; then
+    ssh_result=$(ssh -o ConnectTimeout=30 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH && rm -rf $DEPLOY_DIR.bak && mv $DEPLOY_DIR $DEPLOY_DIR.bak 2>/dev/null; mkdir -p $DEPLOY_DIR && unzip -o $DEPLOY_PACKAGE -d $DEPLOY_DIR" 2>&1)
+    
+    if [ $? -eq 0 ]; then
         log_success "部署包解压成功"
     else
-        log_error "部署包解压失败"
+        log_error "部署包解压失败: $ssh_result"
         return 1
     fi
     
     # 创建数据目录（确保 volume 映射正常）
     log_info "创建数据目录..."
-    ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "mkdir -p $SERVER_PATH/$DEPLOY_DIR/data $SERVER_PATH/$DEPLOY_DIR/output $SERVER_PATH/$DEPLOY_DIR/logs $SERVER_PATH/$DEPLOY_DIR/progress" > /dev/null 2>&1
+    ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "mkdir -p $SERVER_PATH/$DEPLOY_DIR/data $SERVER_PATH/$DEPLOY_DIR/output $SERVER_PATH/$DEPLOY_DIR/logs $SERVER_PATH/$DEPLOY_DIR/progress"
+    
+    # 恢复数据库文件（从备份目录恢复）
+    log_info "恢复数据文件..."
+    ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "
+        # 优先从旧部署目录恢复
+        if [ -f $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db ]; then
+            cp $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db $SERVER_PATH/$DEPLOY_DIR/data/
+            echo '已从备份目录恢复数据库文件'
+        # 否则从最新的备份恢复
+        elif ls $SERVER_PATH/data_backup_*/business.db 1>/dev/null 2>&1; then
+            latest_backup=\$(ls -td $SERVER_PATH/data_backup_*/ | head -1)
+            if [ -f \"\${latest_backup}business.db\" ]; then
+                cp \"\${latest_backup}business.db\" $SERVER_PATH/$DEPLOY_DIR/data/
+                echo \"已从 \$latest_backup 恢复数据库文件\"
+            fi
+        else
+            echo '没有找到数据库备份，将创建新数据库'
+        fi
+        
+        # 删除部署包中可能带来的空 WAL 文件
+        rm -f $SERVER_PATH/$DEPLOY_DIR/data/business.db-shm $SERVER_PATH/$DEPLOY_DIR/data/business.db-wal 2>/dev/null
+    "
     
     # 停止旧容器
     log_info "停止旧容器..."
-    ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose down" > /dev/null 2>&1 || true
+    ssh -o ConnectTimeout=30 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose down 2>/dev/null" || true
     
     # 启动新容器
-    log_info "构建并启动新容器..."
-    if ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose up -d --build" > /dev/null 2>&1; then
-        log_success "容器启动成功"
+    log_info "构建并启动新容器 (可能需要几分钟)..."
+    build_result=$(ssh -o ConnectTimeout=300 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose up -d --build" 2>&1)
+    
+    if [ $? -eq 0 ]; then
+        log_success "容器启动命令执行成功"
     else
-        log_error "容器启动失败"
+        log_error "容器启动失败: $build_result"
         return 1
     fi
     
+    # 等待容器启动
+    log_info "等待容器启动..."
+    sleep 10
+    
     # 检查容器状态
     log_info "检查容器状态..."
-    container_status=$(ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose ps" 2>/dev/null)
+    container_status=$(ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose ps" 2>/dev/null)
     
     if echo "$container_status" | grep -q "Up"; then
         log_success "容器状态检查通过"
@@ -152,16 +271,17 @@ server_deployment() {
         
         # 初始化AI配置
         log_info "初始化AI配置..."
-        if ssh -p 22 -o ConnectTimeout=5 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && python init_ai_config.py" > /dev/null 2>&1; then
-            log_success "AI配置初始化成功"
-        else
-            log_warning "AI配置初始化失败，可能需要手动配置"
-        fi
+        ssh -o ConnectTimeout=30 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose exec -T web python init_ai_config.py 2>/dev/null" || log_warning "AI配置初始化跳过"
         
         return 0
     else
         log_error "容器状态检查失败"
         echo "$container_status"
+        
+        # 显示容器日志帮助调试
+        log_info "容器日志:"
+        ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "cd $SERVER_PATH/$DEPLOY_DIR && docker-compose logs --tail=50" 2>/dev/null || true
+        
         return 1
     fi
 }
