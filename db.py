@@ -9,10 +9,60 @@ from dataclasses import dataclass
 from typing import Optional
 
 # SQLite database file path
+import shutil
+from datetime import datetime
+
+# SQLite database file path
 import os
 DATA_DIR = os.environ.get('DATA_DIR', 'data')
+BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(BACKUP_DIR, exist_ok=True)
 DB_FILE = os.path.join(DATA_DIR, "business.db")
+
+
+def backup_database_daily():
+    """Daily database backup"""
+    try:
+        if not os.path.exists(DB_FILE):
+            return
+            
+        today = datetime.now().strftime('%Y%m%d')
+        backup_file = os.path.join(BACKUP_DIR, f"business_{today}.db")
+        
+        if not os.path.exists(backup_file):
+            # Use SQLite backup API for safe hot backup if possible, 
+            # otherwise shutil copy (less safe if writing, but ok for startup)
+            try:
+                # Hot backup using sqlite3 API
+                src = sqlite3.connect(DB_FILE)
+                dst = sqlite3.connect(backup_file)
+                with dst:
+                    src.backup(dst)
+                dst.close()
+                src.close()
+                print(f"[BACKUP] Database backed up to {backup_file}", file=sys.stderr)
+            except Exception as e:
+                # Fallback to file copy
+                print(f"[BACKUP WARNING] SQLite backup API failed: {e}. Falling back to file copy.", file=sys.stderr)
+                shutil.copy2(DB_FILE, backup_file)
+                print(f"[BACKUP] Database copied to {backup_file}", file=sys.stderr)
+                
+            # Cleanup old backups (keep last 30 days)
+            backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.startswith("business_") and f.endswith(".db")])
+            if len(backups) > 30:
+                for old_backup in backups[:-30]:
+                    try:
+                        os.remove(os.path.join(BACKUP_DIR, old_backup))
+                        print(f"[BACKUP] Removed old backup: {old_backup}", file=sys.stderr)
+                    except OSError:
+                        pass
+        else:
+            print(f"[BACKUP] Backup for today already exists: {backup_file}", file=sys.stderr)
+            
+    except Exception as e:
+        print(f"[BACKUP ERROR] Backup process failed: {e}", file=sys.stderr)
+
 
 
 @dataclass
@@ -406,7 +456,7 @@ def save_business_data_to_db(data: list, product: str = '', city: str = '') -> d
 
 
 def get_history_records(page: int = 1, per_page: int = 20, search: str = '', 
-                        show_empty_email: bool = True) -> dict:
+                        email_filter: str = 'all') -> dict:
     """
     获取历史记录（分页）
     
@@ -414,7 +464,7 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
         page: 页码
         per_page: 每页数量
         search: 搜索关键词
-        show_empty_email: 是否显示空邮箱记录
+        email_filter: 邮箱筛选 'all', 'has_email', 'no_email'
         
     Returns:
         dict: 包含 records, total, page, per_page, total_pages
@@ -440,8 +490,10 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
         conditions = []
         params = []
         
-        if not show_empty_email:
-            conditions.append("email IS NOT NULL AND email != ''")
+        if email_filter == 'has_email':
+            conditions.append("email IS NOT NULL AND email != '' AND email != '-'")
+        elif email_filter == 'no_email':
+            conditions.append("(email IS NULL OR email = '' OR email = '-')")
         
         if search:
             conditions.append("(name LIKE ? OR email LIKE ? OR city LIKE ? OR product LIKE ?)")

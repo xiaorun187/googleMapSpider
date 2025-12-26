@@ -19,7 +19,7 @@ from scraper import extract_business_info
 from contact_scraper import extract_contact_info
 from utils import save_to_csv, save_to_excel
 from email_sender import EmailSender
-from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count, update_send_failed
+from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count, update_send_failed, backup_database_daily
 from services.user_service import UserService
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -781,10 +781,10 @@ def get_history():
     page = int(request.args.get('page', 1))
     size = int(request.args.get('size', 10))
     query = request.args.get('query', '')
-    show_empty_email = request.args.get('show_empty_email', 'false').lower() == 'true'  # 获取筛选参数，默认为 false
-    print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', show_empty_email={show_empty_email}", file=sys.stderr)
+    email_filter = request.args.get('filter', 'all')  # 获取筛选参数: all, has_email, no_email
+    print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', filter={email_filter}", file=sys.stderr)
     try:
-        result = get_history_records(page=page, per_page=size, search=query, show_empty_email=show_empty_email)
+        result = get_history_records(page=page, per_page=size, search=query, email_filter=email_filter)
         return jsonify({
             "status": "success",
             "records": result['records'],
@@ -1237,6 +1237,10 @@ def proxy_gemini_api():
         # 处理其他未知错误
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
 if __name__ == "__main__":
+    # 启动时执行数据库备份
+    print("[INIT] Doing daily database backup...", file=sys.stderr)
+    backup_database_daily()
+    
     port = int(os.environ.get('PORT', 5001))
     # 使用 socketio.run 启动，支持 WebSocket
     socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
