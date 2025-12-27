@@ -197,6 +197,17 @@
             padding-right: 30px;
         }
 
+        .form-select:disabled {
+            background-color: #f1f5f9;
+            color: #94a3b8;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .form-select:disabled option {
+            color: #94a3b8;
+        }
+
         .checkbox-group {
             display: flex;
             align-items: center;
@@ -660,9 +671,11 @@
                         <div class="form-group">
                             <label>🏙️ 城市范围 <span
                                     style="font-weight:normal;color:#94a3b8;font-size:11px;">(留空则全境爬取)</span></label>
-                            <select id="city-select" name="city-select" class="form-input form-select" disabled>
-                                <option value="">-- 先选择国家 --</option>
-                            </select>
+
+                            <div id="city-select-hint" style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:8px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:11px;color:#0369a1;">
+                                <span style="font-size:14px;">ℹ️</span>
+                                <span>请先在上方选择目标国家，然后可选择具体城市</span>
+                            </div>
                             <input type="text" id="city" name="city" class="form-input" placeholder="或手动输入城市名称..."
                                 style="margin-top: 8px;">
                             <div id="country-scrape-hint"
@@ -1044,24 +1057,40 @@
         async function initLocation() {
             try {
                 const r = await fetch('/api/countries');
+                if (!r.ok) {
+                    throw new Error(`HTTP error! status: ${r.status}`);
+                }
                 countryCityData = await r.json();
                 const sel = document.getElementById('country');
+                
+                console.log('加载国家数据成功，共', Object.keys(countryCityData).length, '个国家');
+                
+                // 保留第一个"请选择国家"选项，从第二个位置开始添加
                 Object.keys(countryCityData).sort((a, b) => countryCityData[a].name.localeCompare(countryCityData[b].name)).forEach(code => {
                     const opt = new Option(countryCityData[code].name, code);
                     sel.add(opt);
                 });
-            } catch (e) { }
+                
+                console.log('国家下拉框选项数量:', sel.options.length);
+            } catch (e) { 
+                console.error('加载国家数据失败:', e);
+                alert('加载国家列表失败，请刷新页面重试');
+            }
         }
 
         document.getElementById('country').addEventListener('change', function () {
             const citySel = document.getElementById('city-select');
+            const cityHint = document.getElementById('city-select-hint');
             citySel.innerHTML = '<option value="">-- 全部城市 (全境爬取) --</option>';
             const code = this.value;
             if (code && countryCityData[code]) {
                 countryCityData[code].cities.forEach(c => citySel.add(new Option(c, c)));
                 citySel.disabled = false;
+                cityHint.style.display = 'none';
             } else {
                 citySel.disabled = true;
+                citySel.innerHTML = '';
+                cityHint.style.display = 'flex';
             }
             document.getElementById('country-scrape-hint').style.display = code ? 'block' : 'none';
         });
@@ -1070,7 +1099,7 @@
             document.getElementById('city').value = this.value;
         });
 
-        // 初始化
+        // 初始化 - 脚本在body底部，DOM已加载完成，直接执行
         initLocation();
         loadCache();
         checkStatus();
