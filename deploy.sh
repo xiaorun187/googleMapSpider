@@ -225,21 +225,32 @@ server_deployment() {
     ssh -o ConnectTimeout=10 "$SERVER_USER@$SERVER_IP" "
         # 优先从旧部署目录恢复
         if [ -f $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db ]; then
+            # 先执行 WAL checkpoint，确保所有数据写入主数据库文件
+            echo '执行 WAL checkpoint 确保数据完整性...'
+            sqlite3 $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db 'PRAGMA wal_checkpoint(TRUNCATE);' 2>/dev/null || true
+            
+            # 复制数据库文件（包括 WAL 和 SHM 文件以防万一）
             cp $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db $SERVER_PATH/$DEPLOY_DIR/data/
-            echo '已从备份目录恢复数据库文件'
+            # 如果 checkpoint 成功，WAL 文件应该已经清空，但为了安全还是复制
+            if [ -f $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db-wal ]; then
+                cp $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db-wal $SERVER_PATH/$DEPLOY_DIR/data/ 2>/dev/null || true
+            fi
+            if [ -f $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db-shm ]; then
+                cp $SERVER_PATH/$DEPLOY_DIR.bak/data/business.db-shm $SERVER_PATH/$DEPLOY_DIR/data/ 2>/dev/null || true
+            fi
+            echo '已从备份目录恢复数据库文件（含 WAL checkpoint）'
         # 否则从最新的备份恢复
         elif ls $SERVER_PATH/data_backup_*/business.db 1>/dev/null 2>&1; then
             latest_backup=\$(ls -td $SERVER_PATH/data_backup_*/ | head -1)
             if [ -f \"\${latest_backup}business.db\" ]; then
+                # 对备份文件也执行 checkpoint
+                sqlite3 \"\${latest_backup}business.db\" 'PRAGMA wal_checkpoint(TRUNCATE);' 2>/dev/null || true
                 cp \"\${latest_backup}business.db\" $SERVER_PATH/$DEPLOY_DIR/data/
                 echo \"已从 \$latest_backup 恢复数据库文件\"
             fi
         else
             echo '没有找到数据库备份，将创建新数据库'
         fi
-        
-        # 删除部署包中可能带来的空 WAL 文件
-        rm -f $SERVER_PATH/$DEPLOY_DIR/data/business.db-shm $SERVER_PATH/$DEPLOY_DIR/data/business.db-wal 2>/dev/null
     "
     
     # 停止旧容器

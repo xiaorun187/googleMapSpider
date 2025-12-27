@@ -309,6 +309,10 @@ def start_extraction():
         extracted_count = 0
         last_update_time = start_time
         
+        # 初始化多城市进度控制变量
+        total_cities = 0
+        current_city_index = 0
+
         def calculate_eta(current_count, elapsed_seconds, total_limit):
             """计算预计完成时间"""
             if current_count <= 0 or elapsed_seconds <= 0:
@@ -329,12 +333,18 @@ def start_extraction():
             """发送带统计信息的进度更新"""
             nonlocal extracted_count, last_update_time
             
+            # 计算全局进度
+            global_progress = progress
+            if total_cities > 1:
+                # 权重计算: (当前城市索引 * 100 + 当前城市进度) / 总城市数
+                global_progress = int((current_city_index * 100 + progress) / total_cities)
+            
             elapsed = (datetime.now() - start_time).total_seconds()
             speed = extracted_count / elapsed if elapsed > 0 else 0
             eta = calculate_eta(extracted_count, elapsed, total_limit)
             
             update_data = {
-                'progress': progress,
+                'progress': global_progress,
                 'current': current,
                 'business_data': business_data,
                 'message': message,
@@ -448,31 +458,51 @@ def start_extraction():
                 # 如果有城市列表，按顺序爬取每个城市
                 if cities_list and len(cities_list) > 0:
                     total_cities = len(cities_list)
-                    limit_per_city = limit  # 每个城市的限制数量
                     
                     socketio.emit('progress_update', {
                         'progress': 0, 
-                        'message': f'准备爬取 {total_cities} 个城市，每个城市 {limit_per_city} 条数据'
+                        'message': f'准备爬取 {total_cities} 个城市，总目标 {limit} 条数据'
                     })
                     
                     for city_idx, current_city in enumerate(cities_list):
+                        # 更新当前城市索引
+                        current_city_index = city_idx
+                        
                         # 检查停止标志
                         from scraper import should_stop_extraction
                         if should_stop_extraction():
                             stopped = True
                             break
                         
+                        # 计算剩余需要的数量
+                        remaining_limit = limit - len(extracted_data)
+                        if remaining_limit <= 0:
+                            print(f"[INFO] 已达到总目标数量 {limit}，停止爬取", file=sys.stderr)
+                            break
+                            
+                        print(f"[DEBUG] 城市 {current_city}: 剩余需爬取 {remaining_limit} 条", file=sys.stderr)
+                        
                         city_progress = int((city_idx / total_cities) * 100)
                         socketio.emit('progress_update', {
                             'progress': city_progress,
-                            'message': f'正在爬取城市 ({city_idx + 1}/{total_cities}): {current_city}'
+                            'message': f'正在爬取城市 ({city_idx + 1}/{total_cities}): {current_city} (剩余目标: {remaining_limit})'
                         })
                         
-                        extracted_data, stopped = extract_single_city(
-                            driver, current_city, product, limit_per_city, extracted_data, is_recovery
+                        # 使用剩余配额作为当前城市的限制
+                        new_data, city_stopped = extract_single_city(
+                            driver, current_city, product, remaining_limit, extracted_data, is_recovery
                         )
                         
-                        if stopped:
+                        # extract_single_city modify extracted_data in place, but returns it too.
+                        # Since we passed extracted_data list, it was modified in place.
+                        # No need to extend again if it was modified in place, BUT extract_single_city return logic
+                        # seems to return the list passed to it. Let's verify extract_single_city implementation.
+                        # Looking at line 387: extracted_data.append(business_data). It modifies the list in place.
+                        # And returns it: return extracted_data, False
+                        # So new_data IS extracted_data. We don't need to do anything special.
+                        
+                        if city_stopped:
+                            stopped = True
                             break
                         
                         # 城市间短暂休息，避免被封
