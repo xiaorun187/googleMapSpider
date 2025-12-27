@@ -533,9 +533,19 @@
                     <div class="search-wrapper">
                         <select id="email-filter"
                             style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; background: #f8fafc;">
-                            <option value="all">显示全部记录</option>
-                            <option value="has_email" selected>仅显示有邮箱</option>
+                            <option value="all" selected>显示全部记录</option>
+                            <option value="has_email">仅显示有邮箱</option>
                             <option value="no_email">仅显示无邮箱</option>
+                        </select>
+                    </div>
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+                    <div class="search-wrapper">
+                        <select id="send-status-filter"
+                            style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; background: #f8fafc;">
+                            <option value="all" selected>全部状态</option>
+                            <option value="sent">已发送</option>
+                            <option value="pending">未发送</option>
                         </select>
                     </div>
                 </label>
@@ -666,12 +676,13 @@
             loadStats();
             const query = document.getElementById('global-search').value;
             const filter = document.getElementById('email-filter').value;
+            const sendStatusFilter = document.getElementById('send-status-filter').value;
             const tbody = document.getElementById('data-body');
 
             tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:40px;"><span class="spinner"></span> 正在加载数据...</td></tr>';
 
             try {
-                const url = `/get_history?page=${currentPage}&size=${pageSize}&query=${encodeURIComponent(query)}&filter=${filter}`;
+                const url = `/get_history?page=${currentPage}&size=${pageSize}&query=${encodeURIComponent(query)}&filter=${filter}&send_status=${sendStatusFilter}`;
                 const res = await fetch(url);
                 const data = await res.json();
 
@@ -769,6 +780,7 @@
         // Interaction Logic
         document.getElementById('global-search').oninput = _.debounce(() => { currentPage = 1; loadData(); }, 500);
         document.getElementById('email-filter').onchange = () => { currentPage = 1; loadData(); };
+        document.getElementById('send-status-filter').onchange = () => { currentPage = 1; loadData(); };
         document.getElementById('page-size').onchange = (e) => { pageSize = parseInt(e.target.value); currentPage = 1; loadData(); };
 
         document.getElementById('master-checkbox').onclick = (e) => {

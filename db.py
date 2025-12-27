@@ -456,7 +456,7 @@ def save_business_data_to_db(data: list, product: str = '', city: str = '') -> d
 
 
 def get_history_records(page: int = 1, per_page: int = 20, search: str = '', 
-                        email_filter: str = 'all') -> dict:
+                        email_filter: str = 'all', send_status_filter: str = 'all') -> dict:
     """
     获取历史记录（分页）
     
@@ -465,6 +465,7 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
         per_page: 每页数量
         search: 搜索关键词
         email_filter: 邮箱筛选 'all', 'has_email', 'no_email'
+        send_status_filter: 发送状态筛选 'all', 'sent', 'pending'
         
     Returns:
         dict: 包含 records, total, page, per_page, total_pages
@@ -494,6 +495,11 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
             conditions.append("email IS NOT NULL AND email != '' AND email != '-'")
         elif email_filter == 'no_email':
             conditions.append("(email IS NULL OR email = '' OR email = '-')")
+        
+        if send_status_filter == 'sent':
+            conditions.append("send_status = 'sent'")
+        elif send_status_filter == 'pending':
+            conditions.append("(send_status IS NULL OR send_status = 'pending' OR send_status = 'failed')")
         
         if search:
             conditions.append("(name LIKE ? OR email LIKE ? OR city LIKE ? OR product LIKE ?)")

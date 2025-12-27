@@ -812,9 +812,10 @@ def get_history():
     size = int(request.args.get('size', 10))
     query = request.args.get('query', '')
     email_filter = request.args.get('filter', 'all')  # 获取筛选参数: all, has_email, no_email
-    print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', filter={email_filter}", file=sys.stderr)
+    send_status = request.args.get('send_status', 'all')  # 获取发送状态筛选: all, sent, pending
+    print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', filter={email_filter}, send_status={send_status}", file=sys.stderr)
     try:
-        result = get_history_records(page=page, per_page=size, search=query, email_filter=email_filter)
+        result = get_history_records(page=page, per_page=size, search=query, email_filter=email_filter, send_status_filter=send_status)
         return jsonify({
             "status": "success",
             "records": result['records'],
