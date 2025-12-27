@@ -926,6 +926,106 @@ def auto_scraper_facebook_email():
     scraper_facebook_email('')
 
 
+@app.route('/api/records/export-excel', methods=['GET'])
+def export_records_excel():
+    """导出记录到Excel - 支持按ID或筛选条件导出"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+
+    try:
+        ids_param = request.args.get('ids', '')
+        query = request.args.get('query', '')
+        email_filter = request.args.get('filter', 'all')
+        send_status = request.args.get('send_status', 'all')
+        
+        records = []
+        
+        # 定义字段顺序（与数据管理表格一致）
+        db_columns = ['city', 'product', 'name', 'website', 'phones', 'email', 
+                      'send_status', 'send_count', 'last_sent_at', 'created_at',
+                      'whatsapp', 'facebook', 'instagram', 'twitter', 'linkedin', 'youtube']
+        
+        if ids_param:
+            # 按ID导出
+            ids = [int(id.strip()) for id in ids_param.split(',') if id.strip()]
+            if ids:
+                from db import get_db_connection, release_connection
+                connection = get_db_connection()
+                cursor = connection.cursor()
+                placeholders = ','.join(['?' for _ in ids])
+                cursor.execute(f"""
+                    SELECT city, product, name, website, phones, email, 
+                           send_status, send_count, last_sent_at, created_at,
+                           whatsapp, facebook, instagram, twitter, linkedin, youtube
+                    FROM business_records
+                    WHERE id IN ({placeholders})
+                    ORDER BY created_at DESC
+                """, ids)
+                records = [dict(zip(db_columns, row)) for row in cursor.fetchall()]
+                cursor.close()
+                release_connection(connection)
+        else:
+            # 按筛选条件导出所有记录
+            result = get_history_records(page=1, per_page=999999, search=query, 
+                                        email_filter=email_filter, send_status_filter=send_status)
+            # 重新排序字段
+            records = [{col: r.get(col, '') for col in db_columns} for r in result['records']]
+        
+        if not records:
+            return jsonify({"status": "error", "message": "没有可导出的记录"}), 404
+        
+        # 转换为 DataFrame，保持字段顺序
+        df = pd.DataFrame(records, columns=db_columns)
+        
+        # 重命名列为中文（与表格顺序一致）
+        column_names = {
+            'city': '城市',
+            'product': '关键词/类目',
+            'name': '商家名称',
+            'website': '网站',
+            'phones': '联系电话',
+            'email': '电子邮箱',
+            'send_status': '发送状态',
+            'send_count': '发送次数',
+            'last_sent_at': '最后发送',
+            'created_at': '创建时间',
+            'whatsapp': 'WhatsApp',
+            'facebook': 'Facebook',
+            'instagram': 'Instagram',
+            'twitter': 'Twitter',
+            'linkedin': 'LinkedIn',
+            'youtube': 'YouTube'
+        }
+        df = df.rename(columns=column_names)
+        
+        # 创建 Excel 文件
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='商家数据')
+            
+            # 调整列宽
+            worksheet = writer.sheets['商家数据']
+            for idx, col in enumerate(df.columns):
+                max_length = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                col_letter = chr(65 + idx) if idx < 26 else chr(64 + idx // 26) + chr(65 + idx % 26)
+                worksheet.column_dimensions[col_letter].width = min(max_length, 50)
+        
+        output.seek(0)
+        response = make_response(output.read())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        filename = f'business_data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        
+        print(f"[EXPORT] 导出 {len(records)} 条记录到 {filename}", file=sys.stderr)
+        return response
+        
+    except Exception as e:
+        print(f"导出 Excel 失败: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # ============================================================================
 # 国家城市 API (Requirements 10.1, 10.2, 10.4)
 # ============================================================================
