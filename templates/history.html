@@ -543,7 +543,7 @@
             <div class="action-group">
                 <button class="btn btn-primary" onclick="openEditModal()">➕ 手动新增</button>
                 <button class="btn btn-success" id="btn-batch-email">✉️ 批量邮件</button>
-                <button class="btn btn-warning" id="btn-batch-extract">🕷️ 定向提取联系人</button>
+                <button class="btn btn-warning" id="btn-batch-extract">🕷️查找联系信息</button>
                 <button class="btn btn-danger" id="btn-batch-delete">🗑️ 批量删除</button>
             </div>
         </div>
@@ -561,6 +561,7 @@
                         <th>电子邮箱</th>
                         <th>发送状态</th>
                         <th>最后发送</th>
+                        <th>创建时间</th>
                         <th>WhatsApp</th>
                         <th>Facebook</th>
                         <th>Instagram</th>
@@ -667,7 +668,7 @@
             const filter = document.getElementById('email-filter').value;
             const tbody = document.getElementById('data-body');
 
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;"><span class="spinner"></span> 正在加载数据...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:40px;"><span class="spinner"></span> 正在加载数据...</td></tr>';
 
             try {
                 const url = `/get_history?page=${currentPage}&size=${pageSize}&query=${encodeURIComponent(query)}&filter=${filter}`;
@@ -680,17 +681,17 @@
                     renderTable();
                     renderPagination(data.total_pages);
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#ef4444;">❌ 加载失败: ${data.message}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;padding:40px;color:#ef4444;">❌ 加载失败: ${data.message}</td></tr>`;
                 }
             } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#ef4444;">❌ 网络请求失败，请检查服务器连接</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:40px;color:#ef4444;">❌ 网络请求失败，请检查服务器连接</td></tr>';
             }
         }
 
         function renderTable() {
             const tbody = document.getElementById('data-body');
             if (records.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:80px;color:#94a3b8;"><div style="font-size:40px;margin-bottom:10px;">🔍</div>暂无匹配的历史数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:80px;color:#94a3b8;"><div style="font-size:40px;margin-bottom:10px;">🔍</div>暂无匹配的历史数据</td></tr>';
             } else {
                 tbody.innerHTML = records.map(r => `
                 <tr data-id="${r.id}">
@@ -702,7 +703,8 @@
                     <td>${r.phones || '-'}</td>
                     <td>${r.email ? `<span class="badge email">${r.email}</span>` : '<span class="badge">-</span>'}</td>
                     <td><span class="badge ${r.send_status || 'pending'}">${r.send_status === 'sent' ? '已发送' : (r.send_status === 'failed' ? '失败' : '未发送')} (${r.send_count || 0})</span></td>
-                    <td style="font-size:12px;color:#64748b;">${r.last_sent_at ? r.last_sent_at.split(' ')[0] : '-'}</td>
+                    <td style="font-size:12px;color:#64748b;">${r.last_sent_at || '-'}</td>
+                    <td style="font-size:12px;color:#64748b;">${r.created_at || '-'}</td>
                     <td>${r.whatsapp ? `<a href="https://wa.me/${r.whatsapp.replace(/\D/g, '')}" target="_blank" title="WhatsApp" style="text-decoration:none;font-size:16px;">💬</a>` : '<span style="color:#e2e8f0;">-</span>'}</td>
                     <td>${r.facebook ? `<a href="${r.facebook}" target="_blank" title="Facebook" style="text-decoration:none;font-size:16px;">📘</a>` : '<span style="color:#e2e8f0;">-</span>'}</td>
                     <td>${r.instagram ? `<a href="${r.instagram}" target="_blank" title="Instagram" style="text-decoration:none;font-size:16px;">📸</a>` : '<span style="color:#e2e8f0;">-</span>'}</td>
@@ -937,7 +939,7 @@
                 }
 
                 progressDiv.innerHTML = `
-                    <div style="margin-bottom: 10px;">定向提取联系人</div>
+                    <div style="margin-bottom: 10px;">查找联系信息</div>
                     <div style="font-size: 12px;">${d.message}</div>
                     ${d.progress ? `<div style="margin-top: 10px; background: #444; height: 5px; border-radius: 3px;"><div style="background: #4CAF50; height: 100%; width: ${d.progress}%; border-radius: 3px;"></div></div>` : ''}
                 `;
