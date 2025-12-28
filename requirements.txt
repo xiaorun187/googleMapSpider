@@ -49,6 +49,10 @@ wsproto==1.2.0
 # Password hashing
 bcrypt==4.2.0
 
+# Scheduled tasks
+APScheduler>=3.10.0
+
 # Testing dependencies
 pytest==8.3.4
 hypothesis==6.122.3
+freezegun==1.5.1

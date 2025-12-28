@@ -1367,10 +1367,167 @@ def proxy_gemini_api():
     except Exception as e:
         # 处理其他未知错误
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+
+# ============================================================================
+# 定时任务 API (Requirements 1.2, 3.1, 3.2, 5.1, 5.2, 5.3, 4.3)
+# ============================================================================
+
+@app.route('/api/scheduled-tasks/config', methods=['GET'])
+def get_scheduled_task_config():
+    """获取当前任务配置"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    
+    try:
+        from db import get_task_config
+        config = get_task_config('contact_extraction')
+        
+        if not config:
+            return jsonify({"status": "error", "message": "任务配置不存在"}), 404
+        
+        # 获取下次执行时间
+        next_run_time = None
+        if hasattr(app, 'task_manager'):
+            next_run_time = app.task_manager.get_next_run_time()
+        
+        return jsonify({
+            "status": "success",
+            "config": {
+                "task_name": config['task_name'],
+                "schedule_hour": config['schedule_hour'],
+                "schedule_minute": config['schedule_minute'],
+                "enabled": config['enabled'],
+                "next_run_time": next_run_time
+            }
+        })
+    except Exception as e:
+        print(f"[API ERROR] 获取任务配置失败: {e}", file=sys.stderr)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/scheduled-tasks/config', methods=['PUT'])
+def update_scheduled_task_config():
+    """更新任务配置"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "请求数据为空"}), 400
+        
+        schedule_hour = data.get('schedule_hour')
+        schedule_minute = data.get('schedule_minute')
+        enabled = data.get('enabled', True)
+        
+        # 验证参数
+        if schedule_hour is None or schedule_minute is None:
+            return jsonify({"status": "error", "message": "缺少必需参数"}), 400
+        
+        try:
+            schedule_hour = int(schedule_hour)
+            schedule_minute = int(schedule_minute)
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "时间参数必须是整数"}), 400
+        
+        if not (0 <= schedule_hour <= 23):
+            return jsonify({"status": "error", "message": "小时必须在 0-23 之间"}), 400
+        
+        if not (0 <= schedule_minute <= 59):
+            return jsonify({"status": "error", "message": "分钟必须在 0-59 之间"}), 400
+        
+        # 更新配置并重新调度
+        if hasattr(app, 'task_manager'):
+            if app.task_manager.reschedule_task(schedule_hour, schedule_minute, enabled):
+                return jsonify({
+                    "status": "success",
+                    "message": "任务配置已更新"
+                })
+            else:
+                return jsonify({"status": "error", "message": "更新配置失败"}), 500
+        else:
+            return jsonify({"status": "error", "message": "任务管理器未初始化"}), 500
+            
+    except Exception as e:
+        print(f"[API ERROR] 更新任务配置失败: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/scheduled-tasks/trigger', methods=['POST'])
+def trigger_scheduled_task():
+    """手动触发任务"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    
+    try:
+        if hasattr(app, 'task_manager'):
+            if app.task_manager.is_running:
+                return jsonify({
+                    "status": "error",
+                    "message": "任务正在执行，请稍后再试"
+                }), 409
+            
+            if app.task_manager.trigger_now():
+                return jsonify({
+                    "status": "success",
+                    "message": "任务已启动",
+                    "execution_id": app.task_manager.current_execution_id
+                })
+            else:
+                return jsonify({
+                    "status": "error",
+                    "message": "触发任务失败"
+                }), 500
+        else:
+            return jsonify({"status": "error", "message": "任务管理器未初始化"}), 500
+            
+    except Exception as e:
+        print(f"[API ERROR] 触发任务失败: {e}", file=sys.stderr)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/scheduled-tasks/history', methods=['GET'])
+def get_scheduled_task_history():
+    """获取任务执行历史"""
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    
+    try:
+        limit = int(request.args.get('limit', 10))
+        
+        from db import get_execution_history
+        history = get_execution_history('contact_extraction', limit)
+        
+        return jsonify({
+            "status": "success",
+            "history": history
+        })
+    except Exception as e:
+        print(f"[API ERROR] 获取任务历史失败: {e}", file=sys.stderr)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 if __name__ == "__main__":
     # 启动时执行数据库备份
     print("[INIT] Doing daily database backup...", file=sys.stderr)
     backup_database_daily()
+    
+    # 初始化定时任务管理器
+    print("[INIT] Initializing scheduled task manager...", file=sys.stderr)
+    from scheduled_tasks import ScheduledTaskManager
+    
+    app.task_manager = ScheduledTaskManager(app, socketio)
+    app.task_manager.initialize()
+    app.task_manager.start()
+    
+    # 注册应用关闭时的清理
+    import atexit
+    atexit.register(app.task_manager.shutdown)
+    
+    print("[INIT] Scheduled task manager initialized successfully", file=sys.stderr)
     
     port = int(os.environ.get('PORT', 5001))
     # 使用 socketio.run 启动，支持 WebSocket

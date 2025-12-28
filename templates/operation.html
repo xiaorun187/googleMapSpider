@@ -751,6 +751,64 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Scheduled Task Configuration Section -->
+                <div class="panel-card" style="border:none; box-shadow:none; background:transparent; margin-top: 16px;">
+                    <h3 class="section-title">⏰ 定时任务配置</h3>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:16px;">自动化联系信息提取任务</p>
+
+                    <div class="form-group">
+                        <label>执行时间</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="schedule-hour" class="form-input form-select" style="flex: 1;">
+                                <!-- 0-23 hours -->
+                            </select>
+                            <span style="font-size: 14px; color: #64748b;">:</span>
+                            <select id="schedule-minute" class="form-input form-select" style="flex: 1;">
+                                <!-- 0-59 minutes -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="task-enabled" checked>
+                            <label for="task-enabled">启用定时任务</label>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                        <button type="button" class="btn btn-primary" id="save-config-btn" style="flex: 1;">
+                            💾 保存配置
+                        </button>
+                        <button type="button" class="btn btn-success" id="trigger-now-btn" style="flex: 1;">
+                            ▶️ 立即执行
+                        </button>
+                    </div>
+
+                    <div style="padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; font-size: 12px; color: #0369a1; margin-bottom: 16px;">
+                        <strong>下次执行：</strong>
+                        <span id="next-run-time">加载中...</span>
+                    </div>
+
+                    <h6 style="font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 8px;">最近执行历史</h6>
+                    <div style="max-height: 200px; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <table style="width: 100%; font-size: 11px;">
+                            <thead style="position: sticky; top: 0; background: #f1f5f9;">
+                                <tr>
+                                    <th style="padding: 6px 8px; text-align: left; font-weight: 600; color: #64748b;">开始时间</th>
+                                    <th style="padding: 6px 8px; text-align: center; font-weight: 600; color: #64748b;">状态</th>
+                                    <th style="padding: 6px 8px; text-align: center; font-weight: 600; color: #64748b;">成功/失败</th>
+                                </tr>
+                            </thead>
+                            <tbody id="task-history-tbody">
+                                <tr>
+                                    <td colspan="3" style="padding: 16px; text-align: center; color: #94a3b8;">暂无执行记录</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </aside>
 
             <!-- Right Content Panel -->
@@ -1100,10 +1158,195 @@
             document.getElementById('city').value = this.value;
         });
 
+        // ========== Scheduled Task Management ==========
+        
+        // 初始化时间选择器
+        function initTimeSelectors() {
+            const hourSel = document.getElementById('schedule-hour');
+            const minuteSel = document.getElementById('schedule-minute');
+            
+            // 填充小时选项 (0-23)
+            for (let h = 0; h < 24; h++) {
+                const opt = new Option(h.toString().padStart(2, '0'), h);
+                hourSel.add(opt);
+            }
+            
+            // 填充分钟选项 (0-59)
+            for (let m = 0; m < 60; m++) {
+                const opt = new Option(m.toString().padStart(2, '0'), m);
+                minuteSel.add(opt);
+            }
+        }
+        
+        // 加载任务配置
+        async function loadTaskConfig() {
+            try {
+                const r = await fetch('/api/scheduled-tasks/config');
+                const d = await r.json();
+                
+                if (d.status === 'success' && d.config) {
+                    document.getElementById('schedule-hour').value = d.config.schedule_hour;
+                    document.getElementById('schedule-minute').value = d.config.schedule_minute;
+                    document.getElementById('task-enabled').checked = d.config.enabled;
+                    
+                    if (d.config.next_run_time) {
+                        const nextTime = new Date(d.config.next_run_time);
+                        document.getElementById('next-run-time').textContent = nextTime.toLocaleString('zh-CN');
+                    } else {
+                        document.getElementById('next-run-time').textContent = d.config.enabled ? '计算中...' : '任务已禁用';
+                    }
+                }
+            } catch (e) {
+                console.error('加载任务配置失败:', e);
+                document.getElementById('next-run-time').textContent = '加载失败';
+            }
+        }
+        
+        // 保存任务配置
+        document.getElementById('save-config-btn').addEventListener('click', async function() {
+            const hour = parseInt(document.getElementById('schedule-hour').value);
+            const minute = parseInt(document.getElementById('schedule-minute').value);
+            const enabled = document.getElementById('task-enabled').checked;
+            
+            const btn = this;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ 保存中...';
+            btn.disabled = true;
+            
+            try {
+                const r = await fetch('/api/scheduled-tasks/config', {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ schedule_hour: hour, schedule_minute: minute, enabled: enabled })
+                });
+                
+                const d = await r.json();
+                
+                if (d.status === 'success') {
+                    alert('✅ ' + d.message);
+                    loadTaskConfig();
+                    loadTaskHistory();
+                } else {
+                    alert('❌ ' + (d.message || '保存失败'));
+                }
+            } catch (e) {
+                console.error('保存配置失败:', e);
+                alert('❌ 保存配置失败: ' + e.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+        
+        // 手动触发任务
+        document.getElementById('trigger-now-btn').addEventListener('click', async function() {
+            if (!confirm('确定要立即执行联系信息提取任务吗？\n\n任务将在后台运行，提取所有有网站但没有邮箱的商家联系方式。')) {
+                return;
+            }
+            
+            const btn = this;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ 启动中...';
+            btn.disabled = true;
+            
+            try {
+                const r = await fetch('/api/scheduled-tasks/trigger', { method: 'POST' });
+                const d = await r.json();
+                
+                if (d.status === 'success') {
+                    alert('✅ ' + d.message);
+                    setTimeout(() => {
+                        loadTaskHistory();
+                    }, 2000);
+                } else {
+                    alert('❌ ' + (d.message || '触发失败'));
+                }
+            } catch (e) {
+                console.error('触发任务失败:', e);
+                alert('❌ 触发任务失败: ' + e.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+        
+        // 加载任务执行历史
+        async function loadTaskHistory() {
+            try {
+                const r = await fetch('/api/scheduled-tasks/history?limit=10');
+                const d = await r.json();
+                
+                const tbody = document.getElementById('task-history-tbody');
+                
+                if (d.status === 'success' && d.history && d.history.length > 0) {
+                    tbody.innerHTML = d.history.map(record => {
+                        const startTime = new Date(record.start_time).toLocaleString('zh-CN', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        
+                        const statusBadge = record.status === 'completed' 
+                            ? '<span style="background:#dcfce7;color:#16a34a;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">完成</span>'
+                            : record.status === 'failed'
+                            ? '<span style="background:#fee2e2;color:#dc2626;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">失败</span>'
+                            : '<span style="background:#fef3c7;color:#ca8a04;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">运行中</span>';
+                        
+                        const successFailed = record.status === 'running' 
+                            ? '-'
+                            : `<span style="color:#16a34a;">${record.records_success}</span> / <span style="color:#dc2626;">${record.records_failed}</span>`;
+                        
+                        return `
+                            <tr>
+                                <td style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9;">${startTime}</td>
+                                <td style="padding: 6px 8px; text-align: center; border-bottom: 1px solid #f1f5f9;">${statusBadge}</td>
+                                <td style="padding: 6px 8px; text-align: center; border-bottom: 1px solid #f1f5f9;">${successFailed}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #94a3b8;">暂无执行记录</td></tr>';
+                }
+            } catch (e) {
+                console.error('加载任务历史失败:', e);
+            }
+        }
+        
+        // 监听定时任务相关的 WebSocket 事件
+        socket.on('scheduled_task_start', (d) => {
+            console.log('定时任务开始:', d);
+            loadTaskHistory();
+        });
+        
+        socket.on('scheduled_task_progress', (d) => {
+            console.log('定时任务进度:', d);
+            // 可以在这里添加进度显示逻辑
+        });
+        
+        socket.on('scheduled_task_complete', (d) => {
+            console.log('定时任务完成:', d);
+            loadTaskHistory();
+            loadTaskConfig(); // 刷新下次执行时间
+        });
+        
+        socket.on('scheduled_task_error', (d) => {
+            console.error('定时任务错误:', d);
+            loadTaskHistory();
+        });
+
         // 初始化 - 脚本在body底部，DOM已加载完成，直接执行
         initLocation();
         loadCache();
         checkStatus();
+        
+        // 初始化定时任务相关功能
+        initTimeSelectors();
+        loadTaskConfig();
+        loadTaskHistory();
+        
+        // 每30秒刷新一次任务历史
+        setInterval(loadTaskHistory, 30000);
     </script>
 </body>
 

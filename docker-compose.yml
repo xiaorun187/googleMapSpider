@@ -14,4 +14,5 @@ services:
       - FLASK_ENV=development  # 启用 Flask 开发模式（调试）
       - PORT=5000 # 明确告诉容器内应用监听 5000
       - DATA_DIR=/app/data # 数据库目录
+      - TZ=Asia/Shanghai # 设置时区为中国标准时间（确保定时任务按正确时区执行）
     restart: unless-stopped  # 容器意外退出时自动重启

@@ -144,6 +144,67 @@ def get_connection():
         release_connection(connection)
 
 
+def migrate_scheduled_tasks_tables():
+    """创建定时任务相关表"""
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        if not connection:
+            print("[DB ERROR] 无法获取数据库连接进行迁移", file=sys.stderr)
+            return False
+        
+        cursor = connection.cursor()
+        
+        # 创建任务配置表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT NOT NULL UNIQUE,
+                task_type TEXT NOT NULL,
+                schedule_hour INTEGER NOT NULL DEFAULT 2,
+                schedule_minute INTEGER NOT NULL DEFAULT 0,
+                enabled BOOLEAN NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # 创建任务执行历史表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS task_execution_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT NOT NULL,
+                start_time TIMESTAMP NOT NULL,
+                end_time TIMESTAMP,
+                status TEXT NOT NULL,
+                records_processed INTEGER DEFAULT 0,
+                records_success INTEGER DEFAULT 0,
+                records_failed INTEGER DEFAULT 0,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # 创建索引
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_history_name ON task_execution_history(task_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_history_start ON task_execution_history(start_time DESC)")
+        
+        connection.commit()
+        print("[DB] 定时任务表创建成功", file=sys.stderr)
+        return True
+        
+    except Error as e:
+        print(f"[DB ERROR] 创建定时任务表失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
 def init_database():
     """初始化数据库表结构"""
     connection = None
@@ -230,6 +291,9 @@ def init_database():
         
         connection.commit()
         print("数据库初始化完成", file=sys.stderr)
+        
+        # 迁移定时任务表
+        migrate_scheduled_tasks_tables()
         
     except Error as e:
         print(f"数据库初始化失败: {e}", file=sys.stderr)
@@ -1172,4 +1236,339 @@ def get_analytics_summary() -> dict:
         return {}
     finally:
         if cursor: cursor.close()
+        release_connection(connection)
+
+
+# ============================================================================
+# 定时任务相关函数
+# ============================================================================
+
+def get_task_config(task_name: str = 'contact_extraction') -> Optional[dict]:
+    """
+    获取任务配置
+    
+    Args:
+        task_name: 任务名称
+        
+    Returns:
+        dict: 任务配置，或None
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return None
+        
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT id, task_name, task_type, schedule_hour, schedule_minute, 
+                   enabled, created_at, updated_at
+            FROM scheduled_tasks
+            WHERE task_name = ?
+        """, (task_name,))
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'task_name': row[1],
+                'task_type': row[2],
+                'schedule_hour': row[3],
+                'schedule_minute': row[4],
+                'enabled': bool(row[5]),
+                'created_at': row[6],
+                'updated_at': row[7]
+            }
+        return None
+        
+    except Error as e:
+        print(f"[DB ERROR] 获取任务配置失败: {e}", file=sys.stderr)
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def save_task_config(task_name: str, schedule_hour: int, schedule_minute: int, enabled: bool = True) -> bool:
+    """
+    保存/更新任务配置
+    
+    Args:
+        task_name: 任务名称
+        schedule_hour: 执行小时 (0-23)
+        schedule_minute: 执行分钟 (0-59)
+        enabled: 是否启用
+        
+    Returns:
+        bool: 是否成功
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return False
+        
+        cursor = connection.cursor()
+        
+        # 检查是否存在
+        cursor.execute("SELECT id FROM scheduled_tasks WHERE task_name = ?", (task_name,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # 更新现有配置
+            cursor.execute("""
+                UPDATE scheduled_tasks 
+                SET schedule_hour = ?,
+                    schedule_minute = ?,
+                    enabled = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE task_name = ?
+            """, (schedule_hour, schedule_minute, int(enabled), task_name))
+        else:
+            # 插入新配置
+            cursor.execute("""
+                INSERT INTO scheduled_tasks 
+                (task_name, task_type, schedule_hour, schedule_minute, enabled)
+                VALUES (?, 'contact_extraction', ?, ?, ?)
+            """, (task_name, schedule_hour, schedule_minute, int(enabled)))
+        
+        connection.commit()
+        print(f"[DB] 任务配置保存成功: {task_name} at {schedule_hour:02d}:{schedule_minute:02d}, enabled={enabled}", file=sys.stderr)
+        return True
+        
+    except Error as e:
+        print(f"[DB ERROR] 保存任务配置失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def create_default_task_config() -> bool:
+    """
+    创建默认任务配置（每天凌晨2点，启用状态）
+    
+    Returns:
+        bool: 是否成功
+    """
+    return save_task_config('contact_extraction', 2, 0, True)
+
+
+def create_execution_record(task_name: str, start_time: str) -> Optional[int]:
+    """
+    创建任务执行记录
+    
+    Args:
+        task_name: 任务名称
+        start_time: 开始时间 (ISO格式字符串)
+        
+    Returns:
+        int: 记录ID，或None
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return None
+        
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO task_execution_history 
+            (task_name, start_time, status)
+            VALUES (?, ?, 'running')
+        """, (task_name, start_time))
+        
+        connection.commit()
+        record_id = cursor.lastrowid
+        print(f"[DB] 创建任务执行记录: ID={record_id}, task={task_name}", file=sys.stderr)
+        return record_id
+        
+    except Error as e:
+        print(f"[DB ERROR] 创建执行记录失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def update_execution_record(record_id: int, end_time: str, status: str, 
+                            records_processed: int = 0, records_success: int = 0, 
+                            records_failed: int = 0, error_message: str = None) -> bool:
+    """
+    更新任务执行记录
+    
+    Args:
+        record_id: 记录ID
+        end_time: 结束时间 (ISO格式字符串)
+        status: 状态 ('completed', 'failed')
+        records_processed: 处理记录数
+        records_success: 成功记录数
+        records_failed: 失败记录数
+        error_message: 错误信息
+        
+    Returns:
+        bool: 是否成功
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return False
+        
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE task_execution_history 
+            SET end_time = ?,
+                status = ?,
+                records_processed = ?,
+                records_success = ?,
+                records_failed = ?,
+                error_message = ?
+            WHERE id = ?
+        """, (end_time, status, records_processed, records_success, records_failed, error_message, record_id))
+        
+        connection.commit()
+        print(f"[DB] 更新任务执行记录: ID={record_id}, status={status}", file=sys.stderr)
+        return True
+        
+    except Error as e:
+        print(f"[DB ERROR] 更新执行记录失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def get_execution_history(task_name: str = None, limit: int = 10) -> list:
+    """
+    获取任务执行历史
+    
+    Args:
+        task_name: 任务名称（可选，为None时获取所有任务）
+        limit: 返回记录数
+        
+    Returns:
+        list: 执行历史列表
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return []
+        
+        cursor = connection.cursor()
+        
+        if task_name:
+            cursor.execute("""
+                SELECT id, task_name, start_time, end_time, status,
+                       records_processed, records_success, records_failed, error_message
+                FROM task_execution_history
+                WHERE task_name = ?
+                ORDER BY start_time DESC
+                LIMIT ?
+            """, (task_name, limit))
+        else:
+            cursor.execute("""
+                SELECT id, task_name, start_time, end_time, status,
+                       records_processed, records_success, records_failed, error_message
+                FROM task_execution_history
+                ORDER BY start_time DESC
+                LIMIT ?
+            """, (limit,))
+        
+        columns = ['id', 'task_name', 'start_time', 'end_time', 'status',
+                   'records_processed', 'records_success', 'records_failed', 'error_message']
+        
+        results = []
+        for row in cursor.fetchall():
+            record = dict(zip(columns, row))
+            # 计算执行时长
+            if record['start_time'] and record['end_time']:
+                try:
+                    start = datetime.fromisoformat(record['start_time'])
+                    end = datetime.fromisoformat(record['end_time'])
+                    record['duration_seconds'] = int((end - start).total_seconds())
+                except:
+                    record['duration_seconds'] = 0
+            else:
+                record['duration_seconds'] = 0
+            results.append(record)
+        
+        return results
+        
+    except Error as e:
+        print(f"[DB ERROR] 获取执行历史失败: {e}", file=sys.stderr)
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        release_connection(connection)
+
+
+def cleanup_old_execution_history(keep_count: int = 100) -> int:
+    """
+    清理旧的执行历史（保留最近N条）
+    
+    Args:
+        keep_count: 保留记录数
+        
+    Returns:
+        int: 删除的记录数
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return 0
+        
+        cursor = connection.cursor()
+        
+        # 获取要保留的最小ID
+        cursor.execute("""
+            SELECT id FROM task_execution_history
+            ORDER BY start_time DESC
+            LIMIT 1 OFFSET ?
+        """, (keep_count - 1,))
+        
+        row = cursor.fetchone()
+        if row:
+            min_id = row[0]
+            cursor.execute("DELETE FROM task_execution_history WHERE id < ?", (min_id,))
+            deleted_count = cursor.rowcount
+            connection.commit()
+            print(f"[DB] 清理旧执行历史: 删除 {deleted_count} 条记录", file=sys.stderr)
+            return deleted_count
+        
+        return 0
+        
+    except Error as e:
+        print(f"[DB ERROR] 清理执行历史失败: {e}", file=sys.stderr)
+        if connection:
+            connection.rollback()
+        return 0
+    finally:
+        if cursor:
+            cursor.close()
         release_connection(connection)
