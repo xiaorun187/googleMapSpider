@@ -276,8 +276,26 @@ class EmailValidator:
         
         tld = domain.split('.')[-1]
         invalid_tlds = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 
-                       'woff', 'woff2', 'ttf', 'eot', 'ico', 'pdf', 'doc', 'zip']
+                       'woff', 'woff2', 'ttf', 'eot', 'ico', 'pdf', 'doc', 'zip',
+                       'jp', 'webp']  # jp 是图片后缀的一部分（如 @2x.jp）
         return tld in invalid_tlds
+    
+    def has_retina_pattern(self, email: str) -> bool:
+        """
+        检查邮箱是否包含 Retina 图片模式（如 @2x, @3x）
+        
+        Args:
+            email: 待验证的邮箱地址
+            
+        Returns:
+            bool: 是否包含 Retina 模式
+        """
+        if not email:
+            return False
+        
+        # 检测 @1x, @2x, @3x 等 Retina 图片命名模式
+        import re
+        return bool(re.search(r'@[123]x\.', email.lower()))
     
     def is_valid(self, email: str) -> bool:
         """

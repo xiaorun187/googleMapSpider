@@ -136,12 +136,16 @@ def extract_contact_info(driver, business_data_list):
         if any(email.endswith(ext) for ext in file_extensions):
             return True
         
-        # 3. 过滤域名是文件扩展名的情况（如 xxx@11.css）
+        # 3. 过滤域名是文件扩展名的情况（如 xxx@11.css, xxx@2x.jp）
         if domain_part and '.' in domain_part:
             tld = domain_part.split('.')[-1]
-            invalid_tlds = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'woff', 'ttf', 'ico']
+            invalid_tlds = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'woff', 'ttf', 'ico', 'jp', 'webp']
             if tld in invalid_tlds:
                 return True
+        
+        # 3.5 过滤 Retina 图片命名模式（如 xxx@2x.jpg）
+        if re.search(r'@[123]x\.', email):
+            return True
         
         # 4. 过滤包含尺寸模式的（如 100x200）
         import re
