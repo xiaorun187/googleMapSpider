@@ -117,22 +117,60 @@ def extract_contact_info(driver, business_data_list):
 
     def is_junk_email(email):
         """过滤垃圾邮箱和误判"""
-        email = email.lower()
-        # 1. 过滤常见占位符
-        junk_users = ['example', 'domain', 'email', 'user', 'name', 'test', 'admin']
-        user_part = email.split('@')[0]
-        if user_part in junk_users:
+        email = email.lower().strip()
+        user_part = email.split('@')[0] if '@' in email else email
+        domain_part = email.split('@')[1] if '@' in email else ''
+        
+        # 1. 过滤常见占位符用户名
+        junk_users = ['example', 'domain', 'email', 'user', 'name', 'test', 'admin', 
+                      'info', 'contact', 'hello', 'support', 'sales', 'noreply', 'no-reply',
+                      'webmaster', 'postmaster', 'hostmaster', 'abuse']
+        # 只有当用户名完全匹配占位符时才过滤（允许 info@company.com 这种）
+        if user_part in junk_users and domain_part in ['example.com', 'domain.com', 'test.com', 'email.com']:
             return True
             
-        # 2. 再次检查扩展名（以防正则漏网）
-        junk_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.css', '.js', '.woff', '.ttf', '.io'] # .io 有时是域名，需谨慎，但在 css context 中常见
-        # 这里只过滤非域名的扩展名误判，.io 保留
-        file_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.css', '.js', '.woff', '.ttf']
+        # 2. 过滤文件扩展名误判（从CSS/JS文件中提取的）
+        file_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', 
+                          '.css', '.js', '.woff', '.woff2', '.ttf', '.eot', '.ico',
+                          '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar']
         if any(email.endswith(ext) for ext in file_extensions):
             return True
+        
+        # 3. 过滤域名是文件扩展名的情况（如 xxx@11.css）
+        if domain_part and '.' in domain_part:
+            tld = domain_part.split('.')[-1]
+            invalid_tlds = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'woff', 'ttf', 'ico']
+            if tld in invalid_tlds:
+                return True
+        
+        # 4. 过滤包含尺寸模式的（如 100x200）
+        import re
+        if re.search(r'\d{2,}x\d+', email):
+            return True
+        
+        # 5. 过滤包含图片相关关键词的
+        image_keywords = ['logo', 'image', 'img', 'icon', 'banner', 'thumb', 'avatar', 
+                         'photo', 'picture', 'sprite', 'background', 'bg-']
+        if any(kw in user_part for kw in image_keywords):
+            return True
             
-        # 3. 过滤过长或过短的
-        if len(email) > 50 or len(email) < 6:
+        # 6. 过滤过长或过短的
+        if len(email) > 60 or len(email) < 6:
+            return True
+        
+        # 7. 过滤用户名过短的（可能是误提取）
+        if len(user_part) < 2:
+            return True
+        
+        # 8. 过滤包含连续数字过多的（可能是ID或时间戳）
+        if re.search(r'\d{8,}', user_part):
+            return True
+        
+        # 9. 过滤明显无效的域名
+        invalid_domains = ['localhost', '127.0.0.1', 'example.com', 'test.com', 
+                          'domain.com', 'email.com', 'sample.com', 'yoursite.com',
+                          'yourdomain.com', 'company.com', 'website.com']
+        if domain_part in invalid_domains:
             return True
             
         return False

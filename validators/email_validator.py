@@ -52,7 +52,9 @@ class EmailValidator:
     )
     
     # 无效的图片扩展名
-    INVALID_EXTENSIONS: tuple = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg')
+    INVALID_EXTENSIONS: tuple = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', 
+                                  '.webp', '.ico', '.css', '.js', '.woff', '.woff2',
+                                  '.ttf', '.eot', '.pdf', '.doc', '.zip')
     
     # 无效模式列表
     INVALID_PATTERNS: list = [
@@ -60,8 +62,19 @@ class EmailValidator:
         r'\d+x\d*',  # 尺寸模式变体 如 100x
         r'logo',
         r'image',
-        r'img'
+        r'img',
+        r'icon',
+        r'banner',
+        r'thumb',
+        r'avatar',
+        r'sprite',
+        r'background',
     ]
+    
+    # 无效域名列表
+    INVALID_DOMAINS: tuple = ('localhost', '127.0.0.1', 'example.com', 'test.com',
+                              'domain.com', 'email.com', 'sample.com', 'yoursite.com',
+                              'yourdomain.com', 'company.com', 'website.com')
     
     # 预编译无效模式正则
     _compiled_patterns: list = None
@@ -94,11 +107,11 @@ class EmailValidator:
         email = email.strip().lower()
         
         # 检查长度
-        if len(email) > 254:
+        if len(email) > 254 or len(email) < 6:
             return ValidationResult(
                 is_valid=False,
                 email=email,
-                reason='邮箱地址超过最大长度254字符'
+                reason='邮箱地址长度无效'
             )
         
         # 检查格式
@@ -130,7 +143,23 @@ class EmailValidator:
             return ValidationResult(
                 is_valid=False,
                 email=email,
-                reason='邮箱包含无效模式（logo/image/img）'
+                reason='邮箱包含无效模式（logo/image/img等）'
+            )
+        
+        # 检查无效域名
+        if self.has_invalid_domain(email):
+            return ValidationResult(
+                is_valid=False,
+                email=email,
+                reason='邮箱域名无效'
+            )
+        
+        # 检查域名TLD是否为文件扩展名
+        if self.has_file_extension_tld(email):
+            return ValidationResult(
+                is_valid=False,
+                email=email,
+                reason='邮箱域名TLD为文件扩展名'
             )
         
         return ValidationResult(
@@ -190,7 +219,7 @@ class EmailValidator:
     
     def has_invalid_pattern(self, email: str) -> bool:
         """
-        检查邮箱是否包含其他无效模式（logo, image, img）
+        检查邮箱是否包含其他无效模式（logo, image, img等）
         
         Args:
             email: 待验证的邮箱地址
@@ -202,11 +231,53 @@ class EmailValidator:
             return False
         
         email_lower = email.lower()
-        # 只检查 logo, image, img 模式，不包括尺寸模式
-        for pattern in ['logo', 'image', 'img']:
-            if pattern in email_lower:
+        local_part = email_lower.split('@')[0] if '@' in email_lower else email_lower
+        
+        # 检查无效模式
+        invalid_keywords = ['logo', 'image', 'img', 'icon', 'banner', 'thumb', 
+                           'avatar', 'sprite', 'background', 'bg-', 'photo', 'picture']
+        for keyword in invalid_keywords:
+            if keyword in local_part:
                 return True
         return False
+    
+    def has_invalid_domain(self, email: str) -> bool:
+        """
+        检查邮箱域名是否无效
+        
+        Args:
+            email: 待验证的邮箱地址
+            
+        Returns:
+            bool: 域名是否无效
+        """
+        if not email or '@' not in email:
+            return False
+        
+        domain = email.split('@')[1].lower()
+        return domain in self.INVALID_DOMAINS
+    
+    def has_file_extension_tld(self, email: str) -> bool:
+        """
+        检查邮箱域名TLD是否为文件扩展名
+        
+        Args:
+            email: 待验证的邮箱地址
+            
+        Returns:
+            bool: TLD是否为文件扩展名
+        """
+        if not email or '@' not in email:
+            return False
+        
+        domain = email.split('@')[1].lower()
+        if '.' not in domain:
+            return False
+        
+        tld = domain.split('.')[-1]
+        invalid_tlds = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 
+                       'woff', 'woff2', 'ttf', 'eot', 'ico', 'pdf', 'doc', 'zip']
+        return tld in invalid_tlds
     
     def is_valid(self, email: str) -> bool:
         """
