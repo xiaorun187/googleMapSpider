@@ -753,11 +753,11 @@
                 </div>
 
                 <!-- Scheduled Task Configuration Section -->
-                <div class="panel-card" style="border:none; box-shadow:none; background:transparent; margin-top: 16px;">
+                <div class="panel-card" style="border:none; box-shadow:none; background:transparent; margin-top: 12px;">
                     <h3 class="section-title">⏰ 定时任务配置</h3>
-                    <p style="font-size:12px; color:#64748b; margin-bottom:16px;">自动化联系信息提取任务</p>
+                    <p style="font-size:11px; color:#64748b; margin-bottom:10px;">自动化联系信息提取任务</p>
 
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 8px;">
                         <label>执行时间</label>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <select id="schedule-hour" class="form-input form-select" style="flex: 1;">
@@ -770,40 +770,40 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 8px;">
                         <div class="checkbox-group">
                             <input type="checkbox" id="task-enabled" checked>
                             <label for="task-enabled">启用定时任务</label>
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
                         <button type="button" class="btn btn-primary" id="save-config-btn" style="flex: 1;">
-                            💾 保存配置
+                            💾 保存
                         </button>
                         <button type="button" class="btn btn-success" id="trigger-now-btn" style="flex: 1;">
-                            ▶️ 立即执行
+                            ▶️ 执行
                         </button>
                     </div>
 
-                    <div style="padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; font-size: 12px; color: #0369a1; margin-bottom: 16px;">
+                    <div style="padding: 8px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 11px; color: #0369a1; margin-bottom: 10px;">
                         <strong>下次执行：</strong>
                         <span id="next-run-time">加载中...</span>
                     </div>
 
-                    <h6 style="font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 8px;">最近执行历史</h6>
-                    <div style="max-height: 200px; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <table style="width: 100%; font-size: 11px;">
+                    <h6 style="font-size: 11px; font-weight: 600; color: #4a5568; margin-bottom: 6px;">最近执行历史</h6>
+                    <div style="max-height: 150px; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <table style="width: 100%; font-size: 10px;">
                             <thead style="position: sticky; top: 0; background: #f1f5f9;">
                                 <tr>
-                                    <th style="padding: 6px 8px; text-align: left; font-weight: 600; color: #64748b;">开始时间</th>
-                                    <th style="padding: 6px 8px; text-align: center; font-weight: 600; color: #64748b;">状态</th>
-                                    <th style="padding: 6px 8px; text-align: center; font-weight: 600; color: #64748b;">成功/失败</th>
+                                    <th style="padding: 4px 6px; text-align: left; font-weight: 600; color: #64748b;">开始时间</th>
+                                    <th style="padding: 4px 6px; text-align: center; font-weight: 600; color: #64748b;">状态</th>
+                                    <th style="padding: 4px 6px; text-align: center; font-weight: 600; color: #64748b;">成功/失败</th>
                                 </tr>
                             </thead>
                             <tbody id="task-history-tbody">
                                 <tr>
-                                    <td colspan="3" style="padding: 16px; text-align: center; color: #94a3b8;">暂无执行记录</td>
+                                    <td colspan="3" style="padding: 12px; text-align: center; color: #94a3b8;">暂无执行记录</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1299,9 +1299,9 @@
                         
                         return `
                             <tr>
-                                <td style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9;">${startTime}</td>
-                                <td style="padding: 6px 8px; text-align: center; border-bottom: 1px solid #f1f5f9;">${statusBadge}</td>
-                                <td style="padding: 6px 8px; text-align: center; border-bottom: 1px solid #f1f5f9;">${successFailed}</td>
+                                <td style="padding: 4px 6px; border-bottom: 1px solid #f1f5f9; font-size: 10px;">${startTime}</td>
+                                <td style="padding: 4px 6px; text-align: center; border-bottom: 1px solid #f1f5f9;">${statusBadge}</td>
+                                <td style="padding: 4px 6px; text-align: center; border-bottom: 1px solid #f1f5f9; font-size: 10px;">${successFailed}</td>
                             </tr>
                         `;
                     }).join('');
