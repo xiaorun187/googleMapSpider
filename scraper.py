@@ -388,8 +388,8 @@ def navigate_to_city_and_search(driver, city, product):
     # 使用智能等待页面加载完成
     wait_for_page_load(driver)
     
-    # 等待搜索框出现
-    search_box = wait_for_element(driver, 'input#searchboxinput', timeout=15, condition=EC.element_to_be_clickable)
+    # 等待搜索框出现（Google Maps 2026年版更新：使用 name="q" 代替旧的 #searchboxinput）
+    search_box = wait_for_element(driver, 'input[name="q"]', timeout=15, condition=EC.element_to_be_clickable)
     if not search_box:
         yield 0, None, None, "未找到 Google Maps 搜索框"
         return False
@@ -431,7 +431,7 @@ def navigate_to_city_and_search(driver, city, product):
     
     # 第三步：清空搜索框，输入商品名称
     yield 15, None, None, f"正在搜索: {city} 的 {product}..."
-    search_box = wait_for_element(driver, 'input#searchboxinput', timeout=15, condition=EC.element_to_be_clickable)
+    search_box = wait_for_element(driver, 'input[name="q"]', timeout=15, condition=EC.element_to_be_clickable)
     if search_box:
         search_box.clear()
         # 输入 "商品 in 城市" 格式，更精确定位
