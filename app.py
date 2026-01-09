@@ -698,8 +698,8 @@ def extract_contacts_from_db():
 
     def background_db_contact_extraction(proxy=None):
         with app.app_context():
-            from chrome_driver import get_chrome_driver as create_driver
-            driver, proxy_info = create_driver(proxy=proxy, headless=True)
+            # 修正：移除硬编码的 headless=True，由 chrome_driver.py 根据环境自动决定
+            driver, proxy_info = get_chrome_driver(proxy=proxy)
             try:
                 # 获取有网站但没邮箱的记录
                 from db import get_db_connection, release_connection
@@ -732,8 +732,8 @@ def extract_contacts_from_db():
 def background_target_contact_extraction(record_ids, proxy=None):
     """后台定向联系方式提取"""
     with app.app_context():
-        from chrome_driver import get_chrome_driver as create_driver
-        driver, proxy_info = create_driver(proxy=proxy, headless=True)
+        # 修正：移除硬编码的 headless=True，由 chrome_driver.py 根据环境自动决定
+        driver, proxy_info = get_chrome_driver(proxy=proxy)
         try:
             from contact_scraper import extract_contacts_by_ids
             for progress, name, data, msg in extract_contacts_by_ids(driver, record_ids):

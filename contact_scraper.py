@@ -98,20 +98,47 @@ def is_valid_email(email):
     result = _email_validator.validate(email)
     return result.is_valid
 
+def clean_obfuscated_content(text):
+    """处理邮箱混淆，如 info[at]example.com"""
+    if not text:
+        return ""
+    # 常见混淆替换
+    text = text.replace(' [at] ', '@').replace(' (at) ', '@').replace(' {at} ', '@').replace('[at]', '@').replace('(at)', '@')
+    text = text.replace(' [dot] ', '.').replace(' (dot) ', '.').replace(' {dot} ', '.').replace('[dot]', '.').replace('(dot)', '.')
+    return text
+
+def extract_emails_from_meta(driver, email_pattern, is_valid_email_func, is_junk_email_func):
+    """从页面 meta 标签中提取邮箱"""
+    found_emails = set()
+    meta_selectors = [
+        'meta[name="description"]',
+        'meta[property="og:description"]',
+        'meta[property="og:email"]',
+        'meta[name="og:email"]'
+    ]
+    for selector in meta_selectors:
+        try:
+            elem = driver.find_element(By.CSS_SELECTOR, selector)
+            content = elem.get_attribute('content')
+            if content:
+                # 使用传入的 regex
+                matches = re.findall(r"[a-zA-Z0-9.\-_%+#]+@[a-zA-Z0-9.\-_%+#]+\.[a-zA-Z]{2,}", content)
+                for e in matches:
+                    if is_valid_email_func(e) and not is_junk_email_func(e):
+                        found_emails.add(e.lower())
+        except:
+            continue
+    return found_emails
+
 def extract_contact_info(driver, business_data_list):
     """
     优化后的联系方式提取函数
     """
     total = len(business_data_list)
     
-    # 优化：更严格的邮箱正则，且排除常见图片/文件扩展名
-    # 模式解释：
-    # 1. 用户名部分: [a-zA-Z0-9._%+-]+
-    # 2. @ 符号
-    # 3. 域名部分: [a-zA-Z0-9.-]+
-    # 4. 顶级域名: \.[a-zA-Z]{2,}
-    # 5. 负向断言 (?!...): 排除以 .png, .jpg 等结尾的匹配
-    email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?<!\.png)(?<!\.jpg)(?<!\.jpeg)(?<!\.gif)(?<!\.webp)(?<!\.svg)(?<!\.bmp)(?<!\.css)(?<!\.js)")
+    # 优化：更严格且稳健的邮箱正则
+    # 允许更多字符，但通过垃圾过滤逻辑剔除无效匹配
+    email_pattern = re.compile(r"[a-zA-Z0-9.\-_%+#]+@[a-zA-Z0-9.\-_%+#]+\.[a-zA-Z]{2,}")
     
     phone_pattern = re.compile(r"(\+?\d{1,4}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4,6}|\d{8,14}")
 
@@ -148,7 +175,6 @@ def extract_contact_info(driver, business_data_list):
             return True
         
         # 4. 过滤包含尺寸模式的（如 100x200）
-        import re
         if re.search(r'\d{2,}x\d+', email):
             return True
         
@@ -178,7 +204,7 @@ def extract_contact_info(driver, business_data_list):
             return True
             
         return False
-    
+
     # 重置批量处理器
     _batch_processor.clear()
     
@@ -250,11 +276,18 @@ def extract_contact_info(driver, business_data_list):
             phones = set()
 
             # 提取 Emails 和 Phones（主页面）
+            # 处理可能的混淆内容
+            cleaned_text = clean_obfuscated_content(page_text)
+            cleaned_source = clean_obfuscated_content(page_source)
+            
             # 从文本和源代码提取邮箱
-            raw_emails = email_pattern.findall(page_text) + email_pattern.findall(page_source)
+            raw_emails = email_pattern.findall(cleaned_text) + email_pattern.findall(cleaned_source)
             for email in raw_emails:
                 if is_valid_email(email) and not is_junk_email(email):
                     emails.add(email.lower())  # 统一转小写
+            
+            # 从 meta 标签提取
+            emails.update(extract_emails_from_meta(driver, email_pattern, is_valid_email, is_junk_email))
 
             # 从 mailto 链接提取邮箱
             mailto_links = driver.find_elements(By.CSS_SELECTOR, 'a[href^="mailto:"]')
@@ -281,17 +314,31 @@ def extract_contact_info(driver, business_data_list):
                     href = link.get_attribute('href')
                     text = link.text.lower()
                     if href and any(kw in href.lower() or kw in text for kw in contact_keywords):
+                        # 确保链接属于同一个站点的子页面
                         if href.startswith(website.rstrip('/')) or href.startswith('/'):
                             if href.startswith('/'):
                                 href = website.rstrip('/') + href
-                            if href not in potential_links and href != website:
-                                potential_links.append(href)
+                            
+                            # 排除主页和重复链接
+                            if href != website and href != website.rstrip('/') + '/' and href not in [l[1] for l in potential_links]:
+                                # 优化：不仅匹配关键词，还进行评分以确定优先级
+                                score = 0
+                                if any(k in href.lower() for k in ['contact', 'info', 'about', 'legal', 'impressum']):
+                                    score += 10
+                                if any(k in text for k in ['contact', '联系', 'about', '关于']):
+                                    score += 5
+                                
+                                potential_links.append((score, href))
                 except:
                     continue
             
+            # 按分数排序
+            potential_links.sort(key=lambda x: x[0], reverse=True)
+            candidate_urls = [link[1] for link in potential_links]
+            
             # 限制遍历页面数量，避免陷入死循环或过度消耗资源
             max_subpages = 3
-            for subpage_url in potential_links[:max_subpages]:
+            for subpage_url in candidate_urls[:max_subpages]:
                 try:
                     print(f"访问子页面: {subpage_url}")
                     driver.get(subpage_url)
@@ -303,9 +350,15 @@ def extract_contact_info(driver, business_data_list):
                     sub_source = driver.page_source
                     
                     # 提取邮箱
-                    for email in email_pattern.findall(sub_text) + email_pattern.findall(sub_source):
+                    sub_cleaned_text = clean_obfuscated_content(sub_text)
+                    sub_cleaned_source = clean_obfuscated_content(sub_source)
+                    
+                    for email in email_pattern.findall(sub_cleaned_text) + email_pattern.findall(sub_cleaned_source):
                         if is_valid_email(email) and not is_junk_email(email):
                             emails.add(email.lower())
+                    
+                    # 子页面 meta 提取
+                    emails.update(extract_emails_from_meta(driver, email_pattern, is_valid_email, is_junk_email))
                     
                     # 提取电话
                     for phone in phone_pattern.findall(sub_text):
