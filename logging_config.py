@@ -43,11 +43,9 @@ def setup_scheduler_logging():
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     
-    # 设置日志格式
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    # 设置日志格式 - 使用 JSON 格式
+    from utils.enterprise_logger import JsonFormatter
+    formatter = JsonFormatter(service_name='scheduled-tasks', env=os.environ.get('ENV', 'dev'))
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
     
@@ -89,11 +87,9 @@ def setup_app_logging():
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     
-    # 设置日志格式
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    # 设置日志格式 - 使用 JSON 格式
+    from utils.enterprise_logger import JsonFormatter
+    formatter = JsonFormatter(service_name='google-map-spider', env=os.environ.get('ENV', 'dev'))
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
     

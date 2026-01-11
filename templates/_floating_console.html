@@ -1,0 +1,491 @@
+<!-- Floating Task Console -->
+<div id="floating-console" class="floating-console" style="display: none;">
+    <div class="fc-header" id="fc-drag-handle">
+        <div class="fc-title">
+            <span class="fc-status-dot"></span>
+            <span id="fc-title-text">任务监控终端</span>
+        </div>
+        <div class="fc-controls">
+            <button onclick="toggleFloatingConsole()" class="fc-btn" title="最小化/还原">_</button>
+        </div>
+    </div>
+
+    <div class="fc-body" id="fc-body">
+        <!-- Progress Section -->
+        <div class="fc-progress-section">
+            <div class="fc-progress-info">
+                <span id="fc-progress-label">准备就绪</span>
+                <span id="fc-progress-percent">0%</span>
+            </div>
+            <div class="fc-progress-bar-bg">
+                <div class="fc-progress-bar-fill" id="fc-progress-bar"></div>
+            </div>
+        </div>
+
+        <!-- Live Log Terminal -->
+        <div class="fc-terminal">
+            <div class="fc-terminal-header">
+                <span>🖥️ 实时日志</span>
+                <button onclick="clearFloatingConsole()" class="fc-clear-btn">清空</button>
+            </div>
+            <div class="fc-terminal-content" id="fc-console-content">
+                <div class="fc-line system">
+                    <span class="fc-time">[System]</span>
+                    <span>控制台就绪，等待任务启动...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions (Only visible when needed) -->
+        <div class="fc-actions" id="fc-actions" style="display:none;">
+            <button id="fc-stop-btn" class="fc-action-btn stop" onclick="stopTask()">停止任务</button>
+            <button id="fc-extract-btn" class="fc-action-btn extract" onclick="startEmailExtraction()"
+                style="display:none;">提取联系方式</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .floating-console {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 360px;
+        min-width: 300px;
+        /* Minimum width */
+        min-height: 200px;
+        /* Minimum height */
+        background: rgba(15, 23, 42, 0.65);
+        /* Increased Transparency */
+        /* Dark theme glass */
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+        font-family: -apple-system, BlinkMacSystemFont, monospace;
+        color: #e2e8f0;
+        transition: opacity 0.3s ease;
+        /* Removed height transition to allow smooth resizing */
+        display: flex;
+        flex-direction: column;
+        resize: both;
+        /* Enable resizing */
+        overflow: hidden;
+        /* Needed for resize handle */
+    }
+
+    .fc-header {
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: move;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .fc-title {
+        font-size: 13px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+    }
+
+    .fc-status-dot {
+        width: 8px;
+        height: 8px;
+        background: #4ade80;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #4ade80;
+    }
+
+    .fc-btn {
+        background: none;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px;
+        font-weight: bold;
+    }
+
+    .fc-btn:hover {
+        color: white;
+    }
+
+    .fc-body {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+        /* Allow body to expand */
+        min-height: 0;
+        /* Critical for scrolling */
+    }
+
+    /* Progress Bar */
+    .fc-progress-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        margin-bottom: 6px;
+        color: #cbd5e1;
+    }
+
+    .fc-progress-bar-bg {
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .fc-progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        width: 0%;
+        transition: width 0.3s ease;
+    }
+
+    /* Terminal */
+    .fc-terminal {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        /* Take remaining space */
+        min-height: 100px;
+    }
+
+    .fc-terminal-header {
+        padding: 6px 10px;
+        font-size: 11px;
+        color: #94a3b8;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .fc-clear-btn {
+        background: none;
+        border: none;
+        color: #64748b;
+        font-size: 10px;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+
+    .fc-terminal-content {
+        flex: 1;
+        /* Fill the terminal container */
+        height: auto;
+        /* Override fixed height */
+        overflow-y: auto;
+        padding: 8px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 11px;
+        line-height: 1.4;
+    }
+
+    .fc-line {
+        margin-bottom: 4px;
+        word-break: break-all;
+        display: flex;
+        gap: 6px;
+    }
+
+    .fc-time {
+        color: #64748b;
+        flex-shrink: 0;
+    }
+
+    .fc-line.system {
+        color: #94a3b8;
+    }
+
+    .fc-line.info {
+        color: #60a5fa;
+    }
+
+    .fc-line.success {
+        color: #4ade80;
+    }
+
+    .fc-line.warn {
+        color: #facc15;
+    }
+
+    .fc-line.error {
+        color: #f87171;
+    }
+
+    /* Minimized State */
+    .floating-console.minimized .fc-body {
+        display: none;
+    }
+
+    .floating-console.minimized {
+        width: 200px;
+        /* Smaller when minimized */
+    }
+
+    /* Actions */
+    .fc-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .fc-action-btn {
+        flex: 1;
+        padding: 6px;
+        border: none;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .fc-action-btn.stop {
+        background: rgba(239, 68, 68, 0.2);
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+
+    .fc-action-btn.stop:hover {
+        background: rgba(239, 68, 68, 0.3);
+    }
+
+    .fc-action-btn.extract {
+        background: rgba(245, 158, 11, 0.2);
+        color: #fcd34d;
+        border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .fc-action-btn.extract:hover {
+        background: rgba(245, 158, 11, 0.3);
+    }
+</style>
+
+<script>
+    (function () {
+        // --- Persistence Logic ---
+        const STORAGE_KEY = 'fc_state';
+        const el = document.getElementById('floating-console');
+        const handle = document.getElementById('fc-drag-handle');
+        const body = document.getElementById('fc-body');
+
+        // Initialize state with size defaults
+        let state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"x": null, "y": null, "w": null, "h": null, "minimized": false, "visible": true}');
+
+        // Restore Position and Size
+        if (state.x !== null && state.y !== null) {
+            el.style.left = state.x + 'px';
+            el.style.top = state.y + 'px';
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
+        }
+        if (state.w) el.style.width = state.w + 'px';
+        if (state.h) el.style.height = state.h + 'px';
+
+        // Restore Minimized
+        if (state.minimized) {
+            el.classList.add('minimized');
+        }
+
+        // Always show by default if not explicitly hidden (or logic to show only when running)
+        // For now, we show it if we have active task or user wants it
+        el.style.display = state.visible ? 'flex' : 'none';
+
+        // --- Drag Logic ---
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+
+        handle.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'BUTTON') return; // Don't drag if clicking buttons
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            const rect = el.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            el.style.transition = 'none'; // Disable transition during drag
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            let newLeft = initialLeft + dx;
+            let newTop = initialTop + dy;
+
+            // Boundary checks
+            const maxLeft = window.innerWidth - el.offsetWidth;
+            const maxTop = window.innerHeight - el.offsetHeight;
+
+            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+
+            el.style.left = newLeft + 'px';
+            el.style.top = newTop + 'px';
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+            el.style.transition = ''; // Re-enable transition
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            // Save state (position and size)
+            const rect = el.getBoundingClientRect();
+            state.x = rect.left;
+            state.y = rect.top;
+
+            // Only save size if not minimized (to avoid saving the minimized height)
+            if (!state.minimized) {
+                state.w = rect.width;
+                state.h = rect.height;
+            }
+            saveState();
+        }
+
+        // Listen for resize events (mouseup is not triggered on resize handle in some browsers, so we use MutationObserver or simple interval check if needed? 
+        // A simpler way for resize is to hook into mouseup globally which we already do, BUT default resize doesn't trigger drag logic.
+        // So we add a separate listener for mouseup to save size after resize interaction.
+        window.addEventListener('mouseup', () => {
+            const rect = el.getBoundingClientRect();
+            // Simple check: if size changed significantly from stored state, update it
+            if (state.visible && !state.minimized) {
+                if (Math.abs(rect.width - (state.w || 360)) > 5 || Math.abs(rect.height - (state.h || 0)) > 5) {
+                    state.w = rect.width;
+                    state.h = rect.height;
+                    saveState();
+                }
+            }
+        });
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        // --- Toggle Logic ---
+        window.toggleFloatingConsole = function () {
+            el.classList.toggle('minimized');
+            state.minimized = el.classList.contains('minimized');
+            saveState();
+        };
+
+        window.clearFloatingConsole = function () {
+            document.getElementById('fc-console-content').innerHTML = '';
+        };
+
+        // --- Socket Logic (Shared) ---
+        // Basic function to append logs
+        window.fcLog = function (msg, type = 'normal') {
+            const content = document.getElementById('fc-console-content');
+            if (!content) return;
+
+            const div = document.createElement('div');
+            div.className = `fc-line ${type}`;
+
+            // Timestamp
+            const now = new Date();
+            const timeStr = `[${now.getHours().toString().padStart(2, 0)}:${now.getMinutes().toString().padStart(2, 0)}:${now.getSeconds().toString().padStart(2, 0)}]`;
+
+            // Check content for specific tags to colorize
+            let finalType = type;
+            if (msg.includes('[SUCCESS]')) finalType = 'success';
+            else if (msg.includes('[WARN]')) finalType = 'warn';
+            else if (msg.includes('[ERROR]')) finalType = 'error';
+            else if (msg.includes('[STATIC]') || msg.includes('[BROWSER]')) finalType = 'info';
+
+            div.className = `fc-line ${finalType}`;
+            div.innerHTML = `<span class="fc-time">${timeStr}</span><span>${msg}</span>`;
+
+            content.appendChild(div);
+            content.scrollTop = content.scrollHeight;
+
+            // Limit buffer
+            while (content.children.length > 200) content.removeChild(content.firstChild);
+
+            // Ensure visible if receiving logs
+            if (el.style.display === 'none') {
+                el.style.display = 'flex';
+                state.visible = true;
+                saveState();
+            }
+        };
+
+        // Listen to socket events if socket exists
+        if (typeof socket !== 'undefined') {
+            socket.on('progress_update', (d) => {
+                // Update Progress Bar
+                if (d.progress !== undefined) {
+                    document.getElementById('fc-progress-bar').style.width = d.progress + '%';
+                    document.getElementById('fc-progress-percent').innerText = d.progress + '%';
+                }
+
+                // Update Label / Log
+                if (d.message) {
+                    document.getElementById('fc-progress-label').innerText = d.progress < 100 ? d.message : '完成';
+                    // Also log to terminal
+                    fcLog(d.message);
+                }
+
+                // Show actions
+                const actions = document.getElementById('fc-actions');
+                const extractBtn = document.getElementById('fc-extract-btn');
+                const stopBtn = document.getElementById('fc-stop-btn');
+
+                if (d.progress > 0 && d.progress < 100) {
+                    actions.style.display = 'flex';
+                    stopBtn.style.display = 'block';
+                    extractBtn.style.display = 'none';
+                } else if (d.progress === 100) {
+                    stopBtn.style.display = 'none';
+                    if (d.message && d.message.includes('数据提取完成')) {
+                        extractBtn.style.display = 'block';
+                        actions.style.display = 'flex';
+                    }
+                }
+            });
+        }
+
+        // Actions
+        window.stopTask = function () {
+            if (confirm('确定要停止当前任务吗？')) {
+                fetch('/stop_extraction', { method: 'POST' });
+                fcLog('正在停止任务...', 'warn');
+            }
+        };
+
+        window.startEmailExtraction = function () {
+            if (confirm('开始提取联系方式？')) {
+                const proxy = document.getElementById('proxy') ? document.getElementById('proxy').value : '';
+                const formData = new FormData();
+                if (proxy) formData.append('proxy', proxy);
+
+                fetch('/extract_contacts', {
+                    method: 'POST',
+                    body: formData
+                }).then(r => r.json()).then(d => {
+                    fcLog(d.message);
+                    document.getElementById('fc-extract-btn').style.display = 'none';
+                });
+            }
+        }
+
+    })();
+</script>

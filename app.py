@@ -640,18 +640,18 @@ def extract_contacts():
         with app.app_context():
             try:
                 if not business_data_store:
-                    socketio.emit('contact_update', {
+                    socketio.emit('progress_update', {
                         'progress': 100,
                         'message': '没有可用的商家数据，请先执行提取任务'
                     })
                     return
 
                 driver, proxy_info = get_chrome_driver(proxy)
-                socketio.emit('contact_update',
+                socketio.emit('progress_update',
                               {'progress': 0, 'message': '正在初始化浏览器...' if not proxy_info else proxy_info})
 
                 for i, name, business_data, message in extract_contact_info(driver, business_data_store):
-                    socketio.emit('contact_update', {
+                    socketio.emit('progress_update', {
                         'progress': int((i + 1) / len(business_data_store) * 100),
                         'name': name,
                         'business_data': business_data,
@@ -660,7 +660,7 @@ def extract_contacts():
 
                 # 联系方式提取完成后保存到 Excel
                 csv_filename = save_to_excel(business_data_store)
-                socketio.emit('contact_update', {
+                socketio.emit('progress_update', {
                     'progress': 100,
                     'csv_file': csv_filename,
                     'message': '联系方式提取完成',
@@ -673,7 +673,7 @@ def extract_contacts():
 
             except Exception as e:
                 print(f"联系方式提取任务发生异常: {e}", file=sys.stderr)
-                socketio.emit('contact_update', {
+                socketio.emit('progress_update', {
                     'progress': 100,
                     'message': f'联系方式提取出错: {e}'
                 })

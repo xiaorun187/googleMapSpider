@@ -10,7 +10,7 @@ from selenium.webdriver.common.keys import Keys
 import db as db_module
 
 # 导入优化模块
-from utils.structured_logger import StructuredLogger
+from utils.enterprise_logger import get_logger, LogLevel
 from utils.rate_limiter import RateLimiter
 from utils.smart_wait import SmartWaitStrategy
 from utils.data_integrity_validator import DataIntegrityValidator
@@ -21,7 +21,7 @@ from datetime import datetime
 import re
 
 # 初始化全局组件
-_logger = StructuredLogger(log_dir='logs')
+_logger = get_logger('google-map-spider')
 _rate_limiter = RateLimiter()
 _smart_wait = SmartWaitStrategy()
 

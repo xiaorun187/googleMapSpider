@@ -6,6 +6,7 @@ import re
 import json
 from dataclasses import dataclass, asdict
 from typing import Optional
+import dns.resolver
 
 
 @dataclass
@@ -296,6 +297,28 @@ class EmailValidator:
         # 检测 @1x, @2x, @3x 等 Retina 图片命名模式
         import re
         return bool(re.search(r'@[123]x\.', email.lower()))
+    
+    def validate_mx_record(self, email: str) -> bool:
+        """
+        验证邮箱域名的 MX记录 可以在入库前使用，确保域名真实存在
+        
+        Args:
+            email: 待验证的邮箱地址
+            
+        Returns:
+            bool: 域名是否有有效的 MX 记录
+        """
+        if not email or '@' not in email:
+            return False
+            
+        domain = email.split('@')[1]
+        try:
+            dns.resolver.resolve(domain, 'MX')
+            return True
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, dns.resolver.Timeout):
+            return False
+        except Exception:
+            return False
     
     def is_valid(self, email: str) -> bool:
         """

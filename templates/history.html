@@ -480,6 +480,9 @@
             color: #64748b;
         }
     </style>
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>const socket = io();</script>
 </head>
 
 <body>
@@ -536,12 +539,14 @@
                     </svg>
                     <input type="text" id="global-search" placeholder="搜索...">
                 </div>
-                <select id="email-filter" style="padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px; background: #f8fafc;">
+                <select id="email-filter"
+                    style="padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px; background: #f8fafc;">
                     <option value="all" selected>全部</option>
                     <option value="has_email">有邮箱</option>
                     <option value="no_email">无邮箱</option>
                 </select>
-                <select id="send-status-filter" style="padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px; background: #f8fafc;">
+                <select id="send-status-filter"
+                    style="padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px; background: #f8fafc;">
                     <option value="all" selected>全部状态</option>
                     <option value="sent">已发送</option>
                     <option value="pending">未发送</option>
@@ -552,7 +557,8 @@
                 <button class="btn btn-success" id="btn-batch-email">✉️ 邮件</button>
                 <button class="btn btn-warning" id="btn-batch-extract">🕷️ 提取</button>
                 <button class="btn" style="background: #dbeafe; color: #1d4ed8;" id="btn-export-excel">📥 导出</button>
-                <button class="btn" style="background: #fef3c7; color: #b45309;" onclick="openScheduledTaskModal()">⏰ 定时</button>
+                <button class="btn" style="background: #fef3c7; color: #b45309;" onclick="openScheduledTaskModal()">⏰
+                    定时</button>
                 <button class="btn btn-danger" id="btn-batch-delete">🗑️ 删除</button>
             </div>
         </div>
@@ -601,6 +607,9 @@
         </div>
     </main>
 
+    <!-- Include Floating Console -->
+    {% include '_floating_console.html' %}
+
     <!-- Modal for Scheduled Task Configuration -->
     <div class="modal" id="scheduled-task-modal">
         <div class="modal-card" style="max-width: 500px;">
@@ -611,44 +620,57 @@
             </div>
             <div class="modal-body">
                 <p style="font-size:13px; color:#64748b; margin-bottom:16px;">自动化联系信息提取任务，每天定时执行</p>
-                
+
                 <div class="form-group">
                     <label>执行时间</label>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <select id="schedule-hour" style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="schedule-hour"
+                            style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                         </select>
                         <span style="font-size: 18px; color: #64748b; font-weight: 600;">:</span>
-                        <select id="schedule-minute" style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="schedule-minute"
+                            style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                         </select>
                     </div>
                 </div>
 
                 <div class="form-group" style="margin-top: 16px;">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <input type="checkbox" id="task-enabled" checked style="width: 18px; height: 18px; accent-color: #667eea;">
+                    <label
+                        style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <input type="checkbox" id="task-enabled" checked
+                            style="width: 18px; height: 18px; accent-color: #667eea;">
                         <span style="font-size: 14px; color: #334155;">启用定时任务</span>
                     </label>
                 </div>
 
-                <div style="margin-top: 16px; padding: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+                <div
+                    style="margin-top: 16px; padding: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
                     <div style="font-size: 12px; color: #0369a1; font-weight: 600; margin-bottom: 4px;">📅 下次执行时间</div>
                     <div id="next-run-time" style="font-size: 14px; color: #0c4a6e; font-weight: 500;">加载中...</div>
                 </div>
 
                 <div style="margin-top: 20px;">
                     <div style="font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;">📋 最近执行历史</div>
-                    <div style="max-height: 180px; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <div
+                        style="max-height: 180px; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
                         <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
                             <thead style="position: sticky; top: 0; background: #f1f5f9;">
                                 <tr>
-                                    <th style="padding: 8px 10px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">开始时间</th>
-                                    <th style="padding: 8px 10px; text-align: center; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">状态</th>
-                                    <th style="padding: 8px 10px; text-align: center; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">成功/失败</th>
+                                    <th
+                                        style="padding: 8px 10px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">
+                                        开始时间</th>
+                                    <th
+                                        style="padding: 8px 10px; text-align: center; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">
+                                        状态</th>
+                                    <th
+                                        style="padding: 8px 10px; text-align: center; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">
+                                        成功/失败</th>
                                 </tr>
                             </thead>
                             <tbody id="task-history-tbody">
                                 <tr>
-                                    <td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">暂无执行记录</td>
+                                    <td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">暂无执行记录
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -656,7 +678,8 @@
                 </div>
             </div>
             <div class="modal-footer" style="display: flex; gap: 10px;">
-                <button class="btn" onclick="closeScheduledTaskModal()" style="background:#f1f5f9;color:#475569;flex:1;">取消</button>
+                <button class="btn" onclick="closeScheduledTaskModal()"
+                    style="background:#f1f5f9;color:#475569;flex:1;">取消</button>
                 <button class="btn btn-success" onclick="triggerTaskNow()" style="flex:1;">▶️ 立即执行</button>
                 <button class="btn btn-primary" onclick="saveTaskConfig()" style="flex:1;">💾 保存配置</button>
             </div>
@@ -970,12 +993,12 @@
             const query = document.getElementById('global-search').value;
             const filter = document.getElementById('email-filter').value;
             const sendStatusFilter = document.getElementById('send-status-filter').value;
-            
+
             // 检查是否有勾选的记录
             const selectedIds = [...document.querySelectorAll('.record-check:checked')].map(c => parseInt(c.value));
-            
+
             let exportUrl = '/api/records/export-excel?';
-            
+
             if (selectedIds.length > 0) {
                 // 导出选中的记录
                 if (!confirm(`确定要导出选中的 ${selectedIds.length} 条记录吗？`)) return;
@@ -985,20 +1008,20 @@
                 if (!confirm(`确定要导出当前筛选条件下的所有记录吗？\n\n筛选条件：\n- 搜索：${query || '无'}\n- 邮箱：${filter === 'all' ? '全部' : (filter === 'has_email' ? '有邮箱' : '无邮箱')}\n- 状态：${sendStatusFilter === 'all' ? '全部' : (sendStatusFilter === 'sent' ? '已发送' : '未发送')}`)) return;
                 exportUrl += `query=${encodeURIComponent(query)}&filter=${filter}&send_status=${sendStatusFilter}`;
             }
-            
+
             // 显示加载提示
             const btn = document.getElementById('btn-export-excel');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:6px;"></span>导出中...';
             btn.disabled = true;
-            
+
             try {
                 const res = await fetch(exportUrl);
                 if (!res.ok) {
                     const errData = await res.json();
                     throw new Error(errData.message || '导出失败');
                 }
-                
+
                 // 获取文件名
                 const contentDisposition = res.headers.get('Content-Disposition');
                 let filename = 'business_data.xlsx';
@@ -1008,7 +1031,7 @@
                         filename = match[1].replace(/['"]/g, '');
                     }
                 }
-                
+
                 // 下载文件
                 const blob = await res.blob();
                 const url = window.URL.createObjectURL(blob);
@@ -1019,7 +1042,7 @@
                 a.click();
                 window.URL.revokeObjectURL(url);
                 a.remove();
-                
+
             } catch (e) {
                 alert('导出失败: ' + e.message);
             } finally {
@@ -1046,54 +1069,53 @@
         }
 
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
-        // Socket IO 连接
-        const socket = io();
+        // Socket IO (Initialized in head)
+        // const socket = io(); // Removed redundant init
 
         // ========== Scheduled Task Management ==========
-        
+
         // 初始化时间选择器
         function initTimeSelectors() {
             const hourSel = document.getElementById('schedule-hour');
             const minuteSel = document.getElementById('schedule-minute');
-            
+
             // 填充小时选项 (0-23)
             for (let h = 0; h < 24; h++) {
                 const opt = new Option(h.toString().padStart(2, '0'), h);
                 hourSel.add(opt);
             }
-            
+
             // 填充分钟选项 (0-59)
             for (let m = 0; m < 60; m++) {
                 const opt = new Option(m.toString().padStart(2, '0'), m);
                 minuteSel.add(opt);
             }
         }
-        
+
         // 打开定时任务配置弹窗
         function openScheduledTaskModal() {
             loadTaskConfig();
             loadTaskHistory();
             document.getElementById('scheduled-task-modal').classList.add('show');
         }
-        
+
         // 关闭定时任务配置弹窗
         function closeScheduledTaskModal() {
             document.getElementById('scheduled-task-modal').classList.remove('show');
         }
-        
+
         // 加载任务配置
         async function loadTaskConfig() {
             try {
                 const r = await fetch('/api/scheduled-tasks/config');
                 const d = await r.json();
-                
+
                 if (d.status === 'success' && d.config) {
                     document.getElementById('schedule-hour').value = d.config.schedule_hour;
                     document.getElementById('schedule-minute').value = d.config.schedule_minute;
                     document.getElementById('task-enabled').checked = d.config.enabled;
-                    
+
                     if (d.config.next_run_time) {
                         const nextTime = new Date(d.config.next_run_time);
                         document.getElementById('next-run-time').textContent = nextTime.toLocaleString('zh-CN');
@@ -1106,22 +1128,22 @@
                 document.getElementById('next-run-time').textContent = '加载失败';
             }
         }
-        
+
         // 保存任务配置
         async function saveTaskConfig() {
             const hour = parseInt(document.getElementById('schedule-hour').value);
             const minute = parseInt(document.getElementById('schedule-minute').value);
             const enabled = document.getElementById('task-enabled').checked;
-            
+
             try {
                 const r = await fetch('/api/scheduled-tasks/config', {
                     method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ schedule_hour: hour, schedule_minute: minute, enabled: enabled })
                 });
-                
+
                 const d = await r.json();
-                
+
                 if (d.status === 'success') {
                     alert('✅ ' + d.message);
                     loadTaskConfig();
@@ -1134,17 +1156,17 @@
                 alert('❌ 保存配置失败: ' + e.message);
             }
         }
-        
+
         // 手动触发任务
         async function triggerTaskNow() {
             if (!confirm('确定要立即执行联系信息提取任务吗？\n\n任务将在后台运行，提取所有有网站但没有邮箱的商家联系方式。')) {
                 return;
             }
-            
+
             try {
                 const r = await fetch('/api/scheduled-tasks/trigger', { method: 'POST' });
                 const d = await r.json();
-                
+
                 if (d.status === 'success') {
                     alert('✅ ' + d.message);
                     setTimeout(() => {
@@ -1158,15 +1180,15 @@
                 alert('❌ 触发任务失败: ' + e.message);
             }
         }
-        
+
         // 加载任务执行历史
         async function loadTaskHistory() {
             try {
                 const r = await fetch('/api/scheduled-tasks/history?limit=10');
                 const d = await r.json();
-                
+
                 const tbody = document.getElementById('task-history-tbody');
-                
+
                 if (d.status === 'success' && d.history && d.history.length > 0) {
                     tbody.innerHTML = d.history.map(record => {
                         const startTime = new Date(record.start_time).toLocaleString('zh-CN', {
@@ -1175,17 +1197,17 @@
                             hour: '2-digit',
                             minute: '2-digit'
                         });
-                        
-                        const statusBadge = record.status === 'completed' 
+
+                        const statusBadge = record.status === 'completed'
                             ? '<span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">完成</span>'
                             : record.status === 'failed'
-                            ? '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">失败</span>'
-                            : '<span style="background:#fef3c7;color:#ca8a04;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">运行中</span>';
-                        
-                        const successFailed = record.status === 'running' 
+                                ? '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">失败</span>'
+                                : '<span style="background:#fef3c7;color:#ca8a04;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">运行中</span>';
+
+                        const successFailed = record.status === 'running'
                             ? '-'
                             : `<span style="color:#16a34a;">${record.records_success}</span> / <span style="color:#dc2626;">${record.records_failed}</span>`;
-                        
+
                         return `
                             <tr>
                                 <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 12px;">${startTime}</td>
@@ -1201,23 +1223,23 @@
                 console.error('加载任务历史失败:', e);
             }
         }
-        
+
         // 监听定时任务相关的 WebSocket 事件
         socket.on('scheduled_task_start', (d) => {
             console.log('定时任务开始:', d);
             loadTaskHistory();
         });
-        
+
         socket.on('scheduled_task_progress', (d) => {
             console.log('定时任务进度:', d);
         });
-        
+
         socket.on('scheduled_task_complete', (d) => {
             console.log('定时任务完成:', d);
             loadTaskHistory();
             loadTaskConfig();
         });
-        
+
         socket.on('scheduled_task_error', (d) => {
             console.error('定时任务错误:', d);
             loadTaskHistory();
@@ -1267,7 +1289,7 @@
 
         // Init
         loadData();
-        
+
         // 初始化定时任务功能
         initTimeSelectors();
     </script>

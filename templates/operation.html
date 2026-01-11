@@ -635,7 +635,112 @@
                 grid-template-columns: 1fr 1fr;
             }
         }
+
+        /* Console Styles */
+        #console-container {
+            background: #0f172a;
+            color: #4ade80;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+            padding: 12px;
+            border-radius: 8px;
+            height: 240px;
+            overflow-y: auto;
+            font-size: 11px;
+            line-height: 1.5;
+            margin-top: 12px;
+            border: 1px solid #334155;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .console-line {
+            margin-bottom: 4px;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 2px;
+            word-break: break-all;
+            display: flex;
+        }
+
+        .console-timestamp {
+            color: #64748b;
+            margin-right: 8px;
+            flex-shrink: 0;
+            min-width: 65px;
+        }
+
+        .console-msg {
+            color: #e2e8f0;
+        }
+
+        .console-msg.success {
+            color: #4ade80;
+        }
+
+        .console-msg.warn {
+            color: #facc15;
+        }
+
+        .console-msg.error {
+            color: #f87171;
+        }
+
+        .console-msg.info {
+            color: #60a5fa;
+        }
+
+        /* Console Styles (Restored) */
+        #console-container {
+            background: #0f172a;
+            color: #4ade80;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+            padding: 12px;
+            border-radius: 8px;
+            height: 180px;
+            /* Default height */
+            overflow-y: auto;
+            font-size: 11px;
+            line-height: 1.5;
+            border: 1px solid #334155;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: height 0.3s ease;
+        }
+
+        .console-line {
+            margin-bottom: 4px;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 2px;
+            word-break: break-all;
+            display: flex;
+        }
+
+        .console-timestamp {
+            color: #64748b;
+            margin-right: 8px;
+            flex-shrink: 0;
+            min-width: 65px;
+        }
+
+        .console-msg {
+            color: #e2e8f0;
+        }
+
+        .console-msg.success {
+            color: #4ade80;
+        }
+
+        .console-msg.warn {
+            color: #facc15;
+        }
+
+        .console-msg.error {
+            color: #f87171;
+        }
+
+        .console-msg.info {
+            color: #60a5fa;
+        }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>const socket = io();</script>
 </head>
 
 <body>
@@ -673,7 +778,8 @@
                                     style="font-weight:normal;color:#94a3b8;font-size:11px;">(留空则全境爬取)</span></label>
                             <select id="city-select" name="city-select" class="form-input form-select" disabled>
                             </select>
-                            <div id="city-select-hint" style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:6px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:10px;color:#0369a1;">
+                            <div id="city-select-hint"
+                                style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:6px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:10px;color:#0369a1;">
                                 <span style="font-size:12px;">ℹ️</span>
                                 <span>请先选择目标国家</span>
                             </div>
@@ -732,24 +838,19 @@
                                 </svg>
                                 立即停止任务
                             </button>
+                            <button type="button" class="btn btn-primary" id="extract-contacts-btn"
+                                style="display:none; margin-left: 8px; background-color: #f59e0b; border-color: #d97706;">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
+                                    </path>
+                                </svg>
+                                提取联系方式
+                            </button>
                         </div>
                     </form>
 
-                    <div id="active-task-info" style="display:none; margin-top: 16px;">
-                        <div class="progress-card">
-                            <div class="progress-header">
-                                <span id="progress-title"
-                                    style="font-size:12px; font-weight:600; color:#1e293b;">任务执行中</span>
-                                <span class="progress-percentage" id="progress-percentage">0%</span>
-                            </div>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
-                            </div>
-                            <div class="progress-status" id="progress-text">
-                                <div class="loading-dot">●</div> 准备就绪
-                            </div>
-                        </div>
-                    </div>
+                    <div id="active-task-info" style="display:none;"></div>
                 </div>
             </aside>
 
@@ -769,6 +870,9 @@
                         <div class="stat-val" style="color: #667eea;" id="website-count">0</div>
                     </div>
                 </div>
+
+                <!-- Include Floating Console -->
+                {% include '_floating_console.html' %}
 
                 <div class="results-container">
                     <div class="results-header">
@@ -824,7 +928,8 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
-        const socket = io();
+        // Socket initialized in head
+        // const socket = io();
         let businessData = [], currentView = 'card', searchQuery = '', currentPage = 1, pageSize = 12;
         let isExtracting = false;
         let countryCityData = {};
@@ -969,7 +1074,6 @@
                 const d = await r.json();
                 if (d.status === 'success' && d.is_running) {
                     toggleTaskUI(true);
-                    document.getElementById('progress-text').innerHTML = '<div class="loading-dot">●</div> 之前启动的任务正在运行中...';
                 }
             } catch (e) { }
         }
@@ -1007,6 +1111,26 @@
             this.disabled = true;
         });
 
+        // 提取联系方式按钮逻辑
+        document.getElementById('extract-contacts-btn').addEventListener('click', function () {
+            if (confirm('确定要开始提取联系方式(邮箱/电话)吗？此操作将扫描所有已采集但未提取的商家。')) {
+                toggleTaskUI(true);
+
+                const formData = new FormData();
+                const proxy = document.getElementById('proxy').value;
+                if (proxy) formData.append('proxy', proxy);
+
+                fetch('/extract_contacts', {
+                    method: 'POST',
+                    body: formData
+                }).then(r => r.json()).then(d => {
+                    // logToConsole(d.message); // Console logic moved to _floating_console.html
+                });
+            }
+        });
+
+        // toggleConsole function is removed as console logic is now in _floating_console.html
+
         document.getElementById('search-input').addEventListener('input', function () {
             searchQuery = this.value;
             currentPage = 1;
@@ -1029,15 +1153,13 @@
             });
         });
 
-        // Socket IO 事件
+        // Console Logic (Removed - now in _floating_console.html)
+        // function logToConsole(msg, type = 'normal') { ... }
+        // function clearConsole() { ... }
+
+        // Socket IO 事件 - Simplified for Page Logic (Data Table Only)
+        // Console and Progress logic is now handled in _floating_console.html
         socket.on('progress_update', (d) => {
-            if (d.progress) {
-                document.getElementById('progress-bar').style.width = d.progress + '%';
-                document.getElementById('progress-percentage').textContent = d.progress + '%';
-            }
-            if (d.message) {
-                document.getElementById('progress-text').innerHTML = d.progress < 100 ? `<div class="loading-dot">●</div> ${d.message}` : d.message;
-            }
             if (d.business_data) {
                 const newData = Array.isArray(d.business_data) ? d.business_data : [d.business_data];
                 businessData.push(...newData);
@@ -1063,17 +1185,17 @@
                 }
                 countryCityData = await r.json();
                 const sel = document.getElementById('country');
-                
+
                 console.log('加载国家数据成功，共', Object.keys(countryCityData).length, '个国家');
-                
+
                 // 保留第一个"请选择国家"选项，从第二个位置开始添加
                 Object.keys(countryCityData).sort((a, b) => countryCityData[a].name.localeCompare(countryCityData[b].name)).forEach(code => {
                     const opt = new Option(countryCityData[code].name, code);
                     sel.add(opt);
                 });
-                
+
                 console.log('国家下拉框选项数量:', sel.options.length);
-            } catch (e) { 
+            } catch (e) {
                 console.error('加载国家数据失败:', e);
                 alert('加载国家列表失败，请刷新页面重试');
             }

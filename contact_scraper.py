@@ -17,7 +17,7 @@ from validators.url_validator import URLValidator
 from utils.smart_wait import SmartWaitStrategy
 from utils.batch_processor import BatchProcessor
 from utils.data_deduplicator import DataDeduplicator
-from utils.structured_logger import StructuredLogger
+from utils.enterprise_logger import get_logger
 
 # 初始化全局组件
 _email_validator = EmailValidator()
@@ -26,7 +26,17 @@ _url_validator = URLValidator()
 _smart_wait = SmartWaitStrategy()
 _batch_processor = BatchProcessor(batch_size=10)
 _deduplicator = DataDeduplicator()
-_logger = StructuredLogger(log_dir='logs')
+_deduplicator = DataDeduplicator()
+_logger = get_logger('google-map-spider')
+
+# 引入 httpx 和 BeautifulSoup 进行静态提取
+try:
+    import httpx
+    from bs4 import BeautifulSoup
+except ImportError:
+    httpx = None
+    BeautifulSoup = None
+    print("警告: 未安装 httpx 或 beautifulsoup4，混合模式不可用，将仅使用 Selenium。", file=sys.stderr)
 
 
 def wait_for_element(driver, selector, timeout=5, condition=EC.presence_of_element_located):
@@ -130,6 +140,134 @@ def extract_emails_from_meta(driver, email_pattern, is_valid_email_func, is_junk
             continue
     return found_emails
 
+def is_junk_email(email):
+    """过滤垃圾邮箱和误判"""
+    email = email.lower().strip()
+    user_part = email.split('@')[0] if '@' in email else email
+    domain_part = email.split('@')[1] if '@' in email else ''
+    
+    # 1. 过滤常见占位符用户名
+    junk_users = ['example', 'domain', 'email', 'user', 'name', 'test', 'admin', 
+                  'info', 'contact', 'hello', 'support', 'sales', 'noreply', 'no-reply',
+                  'webmaster', 'postmaster', 'hostmaster', 'abuse']
+    # 只有当用户名完全匹配占位符时才过滤（允许 info@company.com 这种）
+    if user_part in junk_users and domain_part in ['example.com', 'domain.com', 'test.com', 'email.com']:
+        return True
+        
+    # 2. 过滤文件扩展名误判（从CSS/JS文件中提取的）
+    file_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', 
+                      '.css', '.js', '.woff', '.woff2', '.ttf', '.eot', '.ico',
+                      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar']
+    if any(email.endswith(ext) for ext in file_extensions):
+        return True
+    
+    # 3. 过滤域名是文件扩展名的情况（如 xxx@11.css, xxx@2x.jp）
+    if domain_part and '.' in domain_part:
+        tld = domain_part.split('.')[-1]
+        invalid_tlds = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'woff', 'ttf', 'ico', 'jp', 'webp']
+        if tld in invalid_tlds:
+            return True
+    
+    # 3.5 过滤 Retina 图片命名模式（如 xxx@2x.jpg）
+    if re.search(r'@[123]x\.', email):
+        return True
+    
+    # 4. 过滤包含尺寸模式的（如 100x200）
+    if re.search(r'\d{2,}x\d+', email):
+        return True
+    
+    # 5. 过滤包含图片相关关键词的
+    image_keywords = ['logo', 'image', 'img', 'icon', 'banner', 'thumb', 'avatar', 
+                     'photo', 'picture', 'sprite', 'background', 'bg-']
+    if any(kw in user_part for kw in image_keywords):
+        return True
+        
+    # 6. 过滤过长或过短的
+    if len(email) > 60 or len(email) < 6:
+        return True
+    
+    # 7. 过滤用户名过短的（可能是误提取）
+    if len(user_part) < 2:
+        return True
+    
+    # 8. 过滤包含连续数字过多的（可能是ID或时间戳）
+    if re.search(r'\d{8,}', user_part):
+        return True
+    
+    # 9. 过滤明显无效的域名
+    invalid_domains = ['localhost', '127.0.0.1', 'example.com', 'test.com', 
+                      'domain.com', 'email.com', 'sample.com', 'yoursite.com',
+                      'yourdomain.com', 'company.com', 'website.com']
+    if domain_part in invalid_domains:
+        return True
+        
+    return False
+
+def extract_emails_static(url, email_pattern, is_valid_email_func, is_junk_email_func, timeout=10):
+    """
+    使用 httpx 和 BeautifulSoup 进行静态页面提取 (轻量化模式)
+    
+    Returns:
+        tuple: (emails, phones, facebook_url)
+    """
+    if not httpx or not BeautifulSoup:
+        return set(), set(), None
+        
+    found_emails = set()
+    found_phones = set()
+    facebook_url = None
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    
+    try:
+        # 使用 httpx 获取页面
+        with httpx.Client(verify=False, follow_redirects=True, timeout=timeout) as client:
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 移除 scripts 和 styles，减少干扰
+        for script in soup(["script", "style"]):
+            script.decompose()
+            
+        text = soup.get_text(separator=' ')
+        
+        # 提取邮箱
+        cleaned_text = clean_obfuscated_content(text)
+        raw_emails = email_pattern.findall(cleaned_text)
+        for email in raw_emails:
+            if is_valid_email_func(email) and not is_junk_email_func(email):
+                # 额外的 MX 验证 (如果配置了)
+                if _email_validator.validate_mx_record(email):
+                    found_emails.add(email.lower())
+                else:
+                    print(f"忽略无效 MX 记录的邮箱: {email}")
+
+        # 提取电话 (简单正则)
+        phone_pattern_static = re.compile(r"(\+?\d{1,4}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4,6}|\d{8,14}")
+        raw_phones = phone_pattern_static.findall(text)
+        for p in raw_phones:
+            if isinstance(p, tuple): p = p[0]
+            clean_phone = ''.join(c for c in p if c.isdigit() or c == '+')
+            if len(clean_phone) >= 8:
+                found_phones.add(clean_phone)
+                
+        # 提取 Facebook
+        fb_link = soup.find('a', href=re.compile(r'facebook\.com', re.I))
+        if fb_link:
+            facebook_url = fb_link.get('href')
+
+        return found_emails, found_phones, facebook_url
+        
+    except Exception as e:
+        print(f"静态提取失败 {url}: {e}")
+        return set(), set(), None
+
 def extract_contact_info(driver, business_data_list):
     """
     优化后的联系方式提取函数
@@ -141,69 +279,6 @@ def extract_contact_info(driver, business_data_list):
     email_pattern = re.compile(r"[a-zA-Z0-9.\-_%+#]+@[a-zA-Z0-9.\-_%+#]+\.[a-zA-Z]{2,}")
     
     phone_pattern = re.compile(r"(\+?\d{1,4}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4,6}|\d{8,14}")
-
-    def is_junk_email(email):
-        """过滤垃圾邮箱和误判"""
-        email = email.lower().strip()
-        user_part = email.split('@')[0] if '@' in email else email
-        domain_part = email.split('@')[1] if '@' in email else ''
-        
-        # 1. 过滤常见占位符用户名
-        junk_users = ['example', 'domain', 'email', 'user', 'name', 'test', 'admin', 
-                      'info', 'contact', 'hello', 'support', 'sales', 'noreply', 'no-reply',
-                      'webmaster', 'postmaster', 'hostmaster', 'abuse']
-        # 只有当用户名完全匹配占位符时才过滤（允许 info@company.com 这种）
-        if user_part in junk_users and domain_part in ['example.com', 'domain.com', 'test.com', 'email.com']:
-            return True
-            
-        # 2. 过滤文件扩展名误判（从CSS/JS文件中提取的）
-        file_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', 
-                          '.css', '.js', '.woff', '.woff2', '.ttf', '.eot', '.ico',
-                          '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar']
-        if any(email.endswith(ext) for ext in file_extensions):
-            return True
-        
-        # 3. 过滤域名是文件扩展名的情况（如 xxx@11.css, xxx@2x.jp）
-        if domain_part and '.' in domain_part:
-            tld = domain_part.split('.')[-1]
-            invalid_tlds = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'woff', 'ttf', 'ico', 'jp', 'webp']
-            if tld in invalid_tlds:
-                return True
-        
-        # 3.5 过滤 Retina 图片命名模式（如 xxx@2x.jpg）
-        if re.search(r'@[123]x\.', email):
-            return True
-        
-        # 4. 过滤包含尺寸模式的（如 100x200）
-        if re.search(r'\d{2,}x\d+', email):
-            return True
-        
-        # 5. 过滤包含图片相关关键词的
-        image_keywords = ['logo', 'image', 'img', 'icon', 'banner', 'thumb', 'avatar', 
-                         'photo', 'picture', 'sprite', 'background', 'bg-']
-        if any(kw in user_part for kw in image_keywords):
-            return True
-            
-        # 6. 过滤过长或过短的
-        if len(email) > 60 or len(email) < 6:
-            return True
-        
-        # 7. 过滤用户名过短的（可能是误提取）
-        if len(user_part) < 2:
-            return True
-        
-        # 8. 过滤包含连续数字过多的（可能是ID或时间戳）
-        if re.search(r'\d{8,}', user_part):
-            return True
-        
-        # 9. 过滤明显无效的域名
-        invalid_domains = ['localhost', '127.0.0.1', 'example.com', 'test.com', 
-                          'domain.com', 'email.com', 'sample.com', 'yoursite.com',
-                          'yourdomain.com', 'company.com', 'website.com']
-        if domain_part in invalid_domains:
-            return True
-            
-        return False
 
     # 重置批量处理器
     _batch_processor.clear()
@@ -246,11 +321,39 @@ def extract_contact_info(driver, business_data_list):
             # 验证 URL 格式
             if not _url_validator.validate(website):
                 print(f"{name} 的网站 URL 无效: {website}")
-                yield i, name, business, f"{name} 的网站 URL 无效"
+                yield i, name, business, f"[WARN] URL 无效: {website}"
                 continue
+            
+            # --- 混合模式优化: 先尝试静态提取 ---
+            print(f"尝试静态提取: {website}")
+            yield i, name, business, f"[STATIC] 正在扫描: {website}"
+            static_emails, static_phones, static_fb = extract_emails_static(
+                website, email_pattern, is_valid_email, is_junk_email
+            )
+            
+            if static_emails:
+                business['emails'] = list(static_emails)
+                business['phones'] = list(static_phones) if static_phones else business.get('phones', [])
+                if static_fb: business['facebook'] = static_fb
+                
+                print(f"静态提取成功! {name} - 邮箱: {static_emails}")
+                
+                # 立即保存并跳过 Selenium
+                try:
+                    save_single_business_to_db(business)
+                except Exception as e:
+                    print(f"保存失败: {e}")
+                    
+                _logger.log_extraction(website, 1, 0)
+                yield i, name, business, f"[SUCCESS] 静态提取命中: {name} (邮箱:{len(static_emails)}个)"
+                continue
+            # -----------------------------------
+            
+            print(f"静态提取未找到邮箱，启动浏览器访问: {website}")
             
             print(f"访问网站: {website} 以提取联系方式")
             _logger.log_request(website, 0, 0)
+            yield i, name, business, f"[BROWSER] 启动浏览器访问: {website}"
             driver.get(website)
             
             # 使用智能等待策略
