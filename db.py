@@ -144,76 +144,12 @@ def get_connection():
         release_connection(connection)
 
 
-def migrate_scheduled_tasks_tables():
-    """创建定时任务相关表"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        if not connection:
-            print("[DB ERROR] 无法获取数据库连接进行迁移", file=sys.stderr)
-            return False
-        
-        cursor = connection.cursor()
-        
-        # 创建任务配置表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS scheduled_tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_name TEXT NOT NULL UNIQUE,
-                task_type TEXT NOT NULL,
-                schedule_hour INTEGER NOT NULL DEFAULT 2,
-                schedule_minute INTEGER NOT NULL DEFAULT 0,
-                enabled BOOLEAN NOT NULL DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # 创建任务执行历史表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS task_execution_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_name TEXT NOT NULL,
-                start_time TIMESTAMP NOT NULL,
-                end_time TIMESTAMP,
-                status TEXT NOT NULL,
-                records_processed INTEGER DEFAULT 0,
-                records_success INTEGER DEFAULT 0,
-                records_failed INTEGER DEFAULT 0,
-                error_message TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # 创建索引
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_history_name ON task_execution_history(task_name)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_history_start ON task_execution_history(start_time DESC)")
-        
-        connection.commit()
-        print("[DB] 定时任务表创建成功", file=sys.stderr)
-        return True
-        
-    except Error as e:
-        print(f"[DB ERROR] 创建定时任务表失败: {e}", file=sys.stderr)
-        if connection:
-            connection.rollback()
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
-
-
 def init_database():
     """初始化数据库表结构"""
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
+    with get_connection() as connection:
         cursor = connection.cursor()
         
-        # 创建 business_records 表
+        # 1. 商家记录表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS business_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,23 +167,44 @@ def init_database():
                 city TEXT,
                 product TEXT,
                 send_count INTEGER DEFAULT 0,
-                send_status TEXT DEFAULT 'pending', -- pending, sent, failed
+                send_status TEXT DEFAULT 'pending',
                 last_sent_at TEXT,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
-        # 尝试为现有数据库添加新字段（如果不存在）
-        try:
-            cursor.execute("ALTER TABLE business_records ADD COLUMN send_status TEXT DEFAULT 'pending'")
-        except Error: pass # 字段已存在
+        # 2. 定时任务表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT NOT NULL UNIQUE,
+                task_type TEXT NOT NULL,
+                schedule_hour INTEGER NOT NULL DEFAULT 2,
+                schedule_minute INTEGER NOT NULL DEFAULT 0,
+                enabled BOOLEAN NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         
-        try:
-            cursor.execute("ALTER TABLE business_records ADD COLUMN last_sent_at TEXT")
-        except Error: pass # 字段已存在
+        # 3. 任务执行历史表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS task_execution_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT NOT NULL,
+                start_time TIMESTAMP NOT NULL,
+                end_time TIMESTAMP,
+                status TEXT NOT NULL,
+                records_processed INTEGER DEFAULT 0,
+                records_success INTEGER DEFAULT 0,
+                records_failed INTEGER DEFAULT 0,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         
-        # 创建 ai_configurations 表
+        # 4. AI 配置表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ai_configurations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -263,7 +220,7 @@ def init_database():
             )
         """)
         
-        # 创建 last_extraction_positions 表
+        # 5. 上次抓取位置表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS last_extraction_positions (
                 url TEXT PRIMARY KEY,
@@ -272,7 +229,7 @@ def init_database():
             )
         """)
         
-        # 创建 users 表（用户账号系统）
+        # 6. 用户表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -283,26 +240,12 @@ def init_database():
             )
         """)
         
-        # 创建索引
+        # 索引创建
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_email ON business_records(email)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_city ON business_records(city)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_name_website ON business_records(name, website)")
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_history_start ON task_execution_history(start_time DESC)")
         
         connection.commit()
         print("数据库初始化完成", file=sys.stderr)
-        
-        # 迁移定时任务表
-        migrate_scheduled_tasks_tables()
-        
-    except Error as e:
-        print(f"数据库初始化失败: {e}", file=sys.stderr)
-        if connection:
-            connection.rollback()
-    finally:
-        if cursor:
-            cursor.close()
-        release_connection(connection)
 
 
 # 启动时初始化数据库

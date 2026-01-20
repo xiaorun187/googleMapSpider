@@ -12,7 +12,7 @@ import requests
 import pandas as pd
 from flask import Flask, jsonify, request, render_template, session, redirect, url_for, send_file, make_response
 from flask_socketio import SocketIO
-from config import SECRET_KEY, CORS_ALLOWED_ORIGINS, OUTPUT_DIR, PASSWORD
+from config import SECRET_KEY, CORS_ALLOWED_ORIGINS, OUTPUT_DIR, PASSWORD, MAX_CONCURRENT_TASKS
 from chrome_driver import get_chrome_driver
 from facebook_email_fetcher import scraper_facebook_email
 from scraper import extract_business_info
@@ -33,133 +33,19 @@ socketio = SocketIO(app, cors_allowed_origins=CORS_ALLOWED_ORIGINS, async_mode='
 # 存储提取的商家数据
 business_data_store = []
 
-# ============================================================================
-# 并发控制 (Requirements 7.3, 7.4)
-# ============================================================================
-# 全局任务管理器：存储线程和 driver 实例
-running_tasks = {}
-
-# 任务队列和并发限制
-MAX_CONCURRENT_TASKS = 1  # 每任务限制1个浏览器实例
-task_queue = Queue()
-task_semaphore = threading.Semaphore(MAX_CONCURRENT_TASKS)
-task_lock = threading.Lock()
-
-
-class TaskManager:
-    """
-    任务管理器 - 控制并发和资源清理
-    
-    Features:
-    - 任务队列管理
-    - 浏览器实例限制（每任务1个）
-    - 资源清理机制
-    """
-    
-    def __init__(self, max_concurrent: int = 1):
-        self.max_concurrent = max_concurrent
-        self._active_tasks = {}
-        self._lock = threading.Lock()
-        self._semaphore = threading.Semaphore(max_concurrent)
-    
-    def can_start_task(self) -> bool:
-        """检查是否可以启动新任务"""
-        with self._lock:
-            return len(self._active_tasks) < self.max_concurrent
-    
-    def register_task(self, task_id: str, thread: threading.Thread, driver=None):
-        """注册新任务"""
-        with self._lock:
-            self._active_tasks[task_id] = {
-                'thread': thread,
-                'driver': driver,
-                'start_time': datetime.now()
-            }
-    
-    def update_driver(self, task_id: str, driver):
-        """更新任务的driver实例"""
-        with self._lock:
-            if task_id in self._active_tasks:
-                self._active_tasks[task_id]['driver'] = driver
-    
-    def unregister_task(self, task_id: str):
-        """注销任务"""
-        with self._lock:
-            if task_id in self._active_tasks:
-                del self._active_tasks[task_id]
-    
-    def get_active_count(self) -> int:
-        """获取活跃任务数"""
-        with self._lock:
-            return len(self._active_tasks)
-    
-    def terminate_task(self, task_id: str) -> bool:
-        """终止指定任务"""
-        with self._lock:
-            if task_id not in self._active_tasks:
-                return False
-            
-            task_info = self._active_tasks[task_id]
-            driver = task_info.get('driver')
-            
-            try:
-                if driver:
-                    driver.quit()
-                    print(f"任务 {task_id} 的 Selenium driver 已终止", file=sys.stderr)
-            except Exception as e:
-                print(f"终止任务 {task_id} 的driver失败: {e}", file=sys.stderr)
-            
-            del self._active_tasks[task_id]
-            return True
-    
-    def terminate_all(self):
-        """终止所有任务"""
-        with self._lock:
-            for task_id in list(self._active_tasks.keys()):
-                task_info = self._active_tasks[task_id]
-                driver = task_info.get('driver')
-                
-                try:
-                    if driver:
-                        driver.quit()
-                        print(f"任务 {task_id} 的 Selenium driver 已终止", file=sys.stderr)
-                except Exception as e:
-                    print(f"终止任务 {task_id} 失败: {e}", file=sys.stderr)
-            
-            self._active_tasks.clear()
-            print("所有任务已清理", file=sys.stderr)
-    
-    def cleanup_stale_tasks(self, max_age_seconds: int = 3600):
-        """清理超时任务（默认1小时）"""
-        with self._lock:
-            now = datetime.now()
-            stale_tasks = []
-            
-            for task_id, task_info in self._active_tasks.items():
-                age = (now - task_info['start_time']).total_seconds()
-                if age > max_age_seconds:
-                    stale_tasks.append(task_id)
-            
-            for task_id in stale_tasks:
-                self.terminate_task(task_id)
-                print(f"清理超时任务: {task_id}", file=sys.stderr)
-
+from utils.task_manager import TaskManager
+from services.scraper_service import ScraperService
 
 # 全局任务管理器实例
 task_manager = TaskManager(max_concurrent=MAX_CONCURRENT_TASKS)
-
-def terminate_all_tasks():
-    """终止所有正在运行的任务和 driver 实例"""
-    task_manager.terminate_all()
+scraper_service = ScraperService(socketio, app.app_context())
 
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
-
 # 初始化用户服务
 user_service = UserService()
-
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -169,55 +55,39 @@ def register():
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
         
-        # 检查密码确认
         if password != confirm_password:
             return render_template('register.html', error="两次输入的密码不一致", username=username)
         
-        # 调用用户服务进行注册
         success, message = user_service.register_user(username, password)
-        
         if success:
-            # 注册成功后跳转到登录页面，并显示成功消息
             return redirect(url_for('login', registered=1))
-        else:
-            return render_template('register.html', error=message, username=username)
-    
+        return render_template('register.html', error=message, username=username)
     return render_template('register.html')
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """用户登录路由"""
-    # 检查是否是注册成功后跳转过来的
     registered = request.args.get('registered')
-    
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         
-        # 调用用户服务进行认证
         auth_result = user_service.authenticate(username, password)
-        
         if auth_result.success:
             session['logged_in'] = True
             session['user_id'] = auth_result.user_id
             session['username'] = auth_result.username
             return redirect(url_for('operation'))
-        else:
-            return render_template('login.html', error=auth_result.error_message)
+        return render_template('login.html', error=auth_result.error_message)
     
-    # 如果是注册成功跳转过来，显示成功消息
     if registered:
         return render_template('login.html', success="注册成功！请登录")
-    
     return render_template('login.html')
-
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
-
 
 @app.route('/operation')
 def operation():
@@ -239,352 +109,52 @@ def start_extraction():
     if not session.get('logged_in'):
         return jsonify({"status": "error", "message": "请先登录"}), 401
 
-    # 支持新的城市+商品模式，以及国家级别爬取
-    country = request.form.get('country')  # 国家代码
-    city = request.form.get('city')
-    product = request.form.get('product')
-    url = request.form.get('url')  # 保留旧的URL模式兼容
-    limit = request.form.get('limit')
-    proxy = request.form.get('proxy')
-    remember_position = request.form.get('remember_position') == 'on'  # 获取复选框状态
-    
-    # 调试日志
-    print(f"[DEBUG] 收到提取请求 - country: {country}, city: {city}, product: {product}, URL: {url}, limit: {limit}, proxy: {proxy}, remember_position: {remember_position}", file=sys.stderr)
-
-    # 处理 limit 参数：为空或无效时设置为不限制（使用一个很大的数）
-    UNLIMITED = 999999  # 不限制时的默认值
-    try:
-        if limit is None or limit == '' or limit.strip() == '':
-            limit = UNLIMITED
-            print(f"[DEBUG] limit 为空，设置为不限制 ({UNLIMITED})", file=sys.stderr)
-        else:
-            limit = int(limit)
-            if limit <= 0:
-                return jsonify({"status": "error", "message": "limit 必须大于 0"}), 400
-    except (ValueError, TypeError):
-        # 如果转换失败，设置为不限制
-        limit = UNLIMITED
-        print(f"[DEBUG] limit 转换失败，设置为不限制 ({UNLIMITED})", file=sys.stderr)
-
-    # 验证：必须有商品，且必须有城市或国家
-    if not product:
-        return jsonify({"status": "error", "message": "请输入商品/服务名称"}), 400
-    if not url and not city and not country:
-        return jsonify({"status": "error", "message": "请选择国家或输入城市名称"}), 400
-
-    terminate_all_tasks()
-    
-    # 重置停止标志
-    from scraper import reset_stop_flag
-    reset_stop_flag()
-    
-    socketio.emit('progress_update', {'progress': 0, 'message': '正在清理旧任务...'})
-
-    # 检查并发限制
     if not task_manager.can_start_task():
-        return jsonify({
-            "status": "error", 
-            "message": f"已达到最大并发任务数 ({MAX_CONCURRENT_TASKS})，请等待当前任务完成"
-        }), 429
+        return jsonify({"status": "error", "message": "已达到最大并发任务数"}), 429
 
-    task_id = f"extract_{os.urandom(4).hex()}"
-    
-    # 获取国家的城市列表（如果没有指定城市但指定了国家）
-    cities_to_scrape = []
-    if not city and country:
+    config = {
+        'country': request.form.get('country'),
+        'city': request.form.get('city'),
+        'product': request.form.get('product'),
+        'url': request.form.get('url'),
+        'limit': int(request.form.get('limit', 999999) or 999999),
+        'proxy': request.form.get('proxy'),
+        'remember_position': request.form.get('remember_position') == 'on'
+    }
+
+    if not config['product']:
+        return jsonify({"status": "error", "message": "请输入商品/服务名称"}), 400
+
+    # 加载国家城市数据（如果适用）
+    if not config['city'] and config['country']:
         try:
             config_path = os.path.join(os.path.dirname(__file__), 'config', 'countries.json')
             if os.path.exists(config_path):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     country_data = json.load(f)
-                    if country in country_data:
-                        cities_to_scrape = country_data[country].get('cities', [])
-                        print(f"[DEBUG] 将按顺序爬取 {country} 的 {len(cities_to_scrape)} 个城市", file=sys.stderr)
+                    config['cities_list'] = country_data.get(config['country'], {}).get('cities', [])
         except Exception as e:
-            print(f"[ERROR] 加载国家城市数据失败: {e}", file=sys.stderr)
+            print(f"[ERROR] 加载国家数据失败: {e}", file=sys.stderr)
 
-    def background_extraction(city, product, url, limit, proxy=None, task_id=task_id, remember_position=False, cities_list=None):
-        driver = None
-        start_time = datetime.now()
-        extracted_count = 0
-        last_update_time = start_time
-        
-        # 初始化多城市进度控制变量
-        total_cities = 0
-        current_city_index = 0
-
-        def calculate_eta(current_count, elapsed_seconds, total_limit):
-            """计算预计完成时间"""
-            if current_count <= 0 or elapsed_seconds <= 0:
-                return "计算中..."
-            speed = current_count / elapsed_seconds  # 条/秒
-            remaining = total_limit - current_count
-            if speed > 0:
-                eta_seconds = remaining / speed
-                if eta_seconds < 60:
-                    return f"{int(eta_seconds)}秒"
-                elif eta_seconds < 3600:
-                    return f"{int(eta_seconds / 60)}分钟"
-                else:
-                    return f"{int(eta_seconds / 3600)}小时{int((eta_seconds % 3600) / 60)}分钟"
-            return "计算中..."
-        
-        def emit_progress_with_stats(progress, current, business_data, message, is_recovery=False, total_limit=limit):
-            """发送带统计信息的进度更新"""
-            nonlocal extracted_count, last_update_time
-            
-            # 计算全局进度
-            global_progress = progress
-            if total_cities > 1:
-                # 权重计算: (当前城市索引 * 100 + 当前城市进度) / 总城市数
-                global_progress = int((current_city_index * 100 + progress) / total_cities)
-            
-            elapsed = (datetime.now() - start_time).total_seconds()
-            speed = extracted_count / elapsed if elapsed > 0 else 0
-            eta = calculate_eta(extracted_count, elapsed, total_limit)
-            
-            update_data = {
-                'progress': global_progress,
-                'current': current,
-                'business_data': business_data,
-                'message': message,
-                'stats': {
-                    'extracted_count': extracted_count,
-                    'speed': f"{speed:.2f} 条/秒",
-                    'eta': eta,
-                    'elapsed': f"{int(elapsed)}秒"
-                }
-            }
-            
-            if is_recovery:
-                update_data['recovery_status'] = 'recovered'
-                update_data['message'] = f"[恢复] {message}"
-            
-            socketio.emit('progress_update', update_data)
-            last_update_time = datetime.now()
-        
-        def extract_single_city(driver, current_city, product, limit_per_city, extracted_data, is_recovery):
-            """提取单个城市的数据，实时保存到数据库"""
-            nonlocal extracted_count
-            
-            from scraper import should_stop_extraction
-            
-            # 统计信息
-            db_stats = {'inserted': 0, 'updated': 0, 'skipped': 0, 'errors': 0}
-            
-            for progress, current, business_data, message in extract_business_info(driver, url, limit_per_city, remember_position, current_city, product):
-                # 检查停止标志
-                if should_stop_extraction():
-                    print(f"[DB STATS] 城市 {current_city} 停止时统计: 插入={db_stats['inserted']}, 更新={db_stats['updated']}, 跳过={db_stats['skipped']}, 错误={db_stats['errors']}", file=sys.stderr)
-                    return extracted_data, True  # 返回数据和停止标志
-                
-                if business_data:
-                    # 检查是否是最终结果（包含 results 和 validation 的字典）
-                    if isinstance(business_data, dict) and 'results' in business_data:
-                        # 这是最终汇总结果，不需要再保存（已经实时保存过了）
-                        print(f"[DEBUG] 收到最终汇总结果，跳过（数据已实时保存）", file=sys.stderr)
-                    elif isinstance(business_data, dict) and 'name' in business_data:
-                        # 这是单个商家数据 - 实时保存到数据库
-                        db_result = save_single_business_to_db(business_data)
-                        
-                        if db_result['success']:
-                            if db_result['action'] == 'inserted':
-                                db_stats['inserted'] += 1
-                            elif db_result['action'] == 'updated':
-                                db_stats['updated'] += 1
-                            
-                            # 只有成功保存的数据才添加到内存列表
-                            extracted_data.append(business_data)
-                            extracted_count = len(extracted_data)
-                            
-                            # 发送保存成功通知
-                            socketio.emit('db_save_status', {
-                                'success': True,
-                                'action': db_result['action'],
-                                'name': business_data.get('name'),
-                                'record_id': db_result['record_id'],
-                                'stats': db_stats
-                            })
-                        else:
-                            if db_result['action'] == 'skipped':
-                                db_stats['skipped'] += 1
-                            else:
-                                db_stats['errors'] += 1
-                            
-                            # 发送保存失败通知
-                            socketio.emit('db_save_status', {
-                                'success': False,
-                                'action': db_result['action'],
-                                'name': business_data.get('name'),
-                                'error': db_result['error'],
-                                'stats': db_stats
-                            })
-                            print(f"[WARNING] 保存失败 [{business_data.get('name')}]: {db_result['error']}", file=sys.stderr)
-                
-                # 检测是否是恢复状态
-                if '恢复' in message or 'recover' in message.lower():
-                    is_recovery = True
-                    socketio.emit('recovery_status', {
-                        'status': 'recovering',
-                        'message': message
-                    })
-                
-                # 只发送单个商家数据到前端，不发送最终汇总结果
-                emit_business_data = None
-                if business_data and isinstance(business_data, dict) and 'name' in business_data and 'results' not in business_data:
-                    emit_business_data = business_data
-                
-                emit_progress_with_stats(progress, current, emit_business_data, message, is_recovery)
-                
-                # 恢复完成后重置标志
-                if is_recovery and progress > 10:
-                    is_recovery = False
-            
-            # 打印城市完成统计
-            print(f"[DB STATS] 城市 {current_city} 完成统计: 插入={db_stats['inserted']}, 更新={db_stats['updated']}, 跳过={db_stats['skipped']}, 错误={db_stats['errors']}", file=sys.stderr)
-            
-            return extracted_data, False
-        
-        with app.app_context():
-            try:
-                driver, proxy_info = get_chrome_driver(proxy)
-                task_manager.update_driver(task_id, driver)
-                socketio.emit('progress_update', {'progress': 0, 'message': '正在初始化浏览器...' if not proxy_info else proxy_info})
-
-                extracted_data = []
-                is_recovery = False
-                stopped = False
-                
-                # 如果有城市列表，按顺序爬取每个城市
-                if cities_list and len(cities_list) > 0:
-                    total_cities = len(cities_list)
-                    
-                    socketio.emit('progress_update', {
-                        'progress': 0, 
-                        'message': f'准备爬取 {total_cities} 个城市，总目标 {limit} 条数据'
-                    })
-                    
-                    for city_idx, current_city in enumerate(cities_list):
-                        # 更新当前城市索引
-                        current_city_index = city_idx
-                        
-                        # 检查停止标志
-                        from scraper import should_stop_extraction
-                        if should_stop_extraction():
-                            stopped = True
-                            break
-                        
-                        # 计算剩余需要的数量
-                        remaining_limit = limit - len(extracted_data)
-                        if remaining_limit <= 0:
-                            print(f"[INFO] 已达到总目标数量 {limit}，停止爬取", file=sys.stderr)
-                            break
-                            
-                        print(f"[DEBUG] 城市 {current_city}: 剩余需爬取 {remaining_limit} 条", file=sys.stderr)
-                        
-                        city_progress = int((city_idx / total_cities) * 100)
-                        socketio.emit('progress_update', {
-                            'progress': city_progress,
-                            'message': f'正在爬取城市 ({city_idx + 1}/{total_cities}): {current_city} (剩余目标: {remaining_limit})'
-                        })
-                        
-                        # 使用剩余配额作为当前城市的限制
-                        new_data, city_stopped = extract_single_city(
-                            driver, current_city, product, remaining_limit, extracted_data, is_recovery
-                        )
-                        
-                        # extract_single_city modify extracted_data in place, but returns it too.
-                        # Since we passed extracted_data list, it was modified in place.
-                        # No need to extend again if it was modified in place, BUT extract_single_city return logic
-                        # seems to return the list passed to it. Let's verify extract_single_city implementation.
-                        # Looking at line 387: extracted_data.append(business_data). It modifies the list in place.
-                        # And returns it: return extracted_data, False
-                        # So new_data IS extracted_data. We don't need to do anything special.
-                        
-                        if city_stopped:
-                            stopped = True
-                            break
-                        
-                        # 城市间短暂休息，避免被封
-                        import time
-                        time.sleep(2)
-                    
-                    if stopped:
-                        socketio.emit('progress_update', {
-                            'progress': 100,
-                            'message': f'爬取已停止，已提取 {len(extracted_data)} 条数据'
-                        })
-                else:
-                    # 单城市爬取（原有逻辑）
-                    extracted_data, stopped = extract_single_city(
-                        driver, city, product, limit, extracted_data, is_recovery
-                    )
-
-                if extracted_data:
-                    global business_data_store
-                    business_data_store = extracted_data
-                    
-                    # 过滤有效的商家数据（必须有 name 字段）
-                    valid_data = [d for d in extracted_data if isinstance(d, dict) and d.get('name')]
-                    print(f"[DEBUG] 数据汇总: 原始 {len(extracted_data)} 条, 有效 {len(valid_data)} 条", file=sys.stderr)
-                    
-                    # 生成 Excel 文件（数据已在抓取过程中实时保存到数据库）
-                    csv_filename = save_to_excel(valid_data)
-                    print(f"[INFO] 数据已实时保存到数据库，Excel 文件已生成: {csv_filename}", file=sys.stderr)
-                    
-                    elapsed = (datetime.now() - start_time).total_seconds()
-                    final_speed = len(extracted_data) / elapsed if elapsed > 0 else 0
-                    
-                    socketio.emit('progress_update', {
-                        'progress': 100,
-                        'csv_file': csv_filename,
-                        'message': '数据提取完成' if not stopped else '爬取已停止，数据已保存',
-                        'data': extracted_data,
-                        'stats': {
-                            'extracted_count': len(extracted_data),
-                            'speed': f"{final_speed:.2f} 条/秒",
-                            'total_time': f"{int(elapsed)}秒"
-                        }
-                    })
-                else:
-                    socketio.emit('progress_update', {
-                        'progress': 100,
-                        'message': '未提取到任何数据'
-                    })
-            except Exception as e:
-                print(f"后台任务 {task_id} 发生异常: {e}", file=sys.stderr)
-                
-                # 发送错误恢复状态通知
-                socketio.emit('error_notification', {
-                    'task_id': task_id,
-                    'error_type': type(e).__name__,
-                    'error_message': str(e),
-                    'recovery_hint': '进度已自动保存，下次启动时可从断点恢复',
-                    'extracted_count': extracted_count
-                })
-                
-                socketio.emit('progress_update', {
-                    'progress': 100,
-                    'message': f'后台任务出错: {e}',
-                    'error': True,
-                    'recovery_available': True
-                })
-            finally:
-                if driver:
-                    try:
-                        driver.quit()
-                    except Exception as e:
-                        print(f"关闭driver失败: {e}", file=sys.stderr)
-                task_manager.unregister_task(task_id)
-
-    thread = threading.Thread(target=background_extraction, args=(city, product, url, limit, proxy, task_id, remember_position, cities_to_scrape))
-    thread.daemon = True
+    task_id = f"extract_{os.urandom(4).hex()}"
+    from scraper import reset_stop_flag
+    reset_stop_flag()
+    task_manager.terminate_all()
     
-    # 注册任务
+    # 清除旧数据，并定义回调
+    business_data_store.clear()
+    def data_callback(data):
+        business_data_store.append(data)
+
+    thread = threading.Thread(
+        target=scraper_service.run_extraction, 
+        args=(config, task_id, task_manager, data_callback)
+    )
+    thread.daemon = True
     task_manager.register_task(task_id, thread)
     thread.start()
 
-    return jsonify({"status": "success", "message": "任务已启动，正在提取数据...", "task_id": task_id})
+    return jsonify({"status": "success", "message": "任务已启动...", "task_id": task_id})
 
 
 @app.route('/stop_extraction', methods=['POST'])
@@ -635,7 +205,7 @@ def extract_contacts():
 
     proxy = request.form.get('proxy')
 
-    def background_contact_extraction(proxy=None):
+    def background_contact_extraction(task_id, proxy=None):
         driver = None
         with app.app_context():
             try:
@@ -647,6 +217,9 @@ def extract_contacts():
                     return
 
                 driver, proxy_info = get_chrome_driver(proxy)
+                # 注册 driver 以便管理
+                task_manager.update_driver(task_id, driver)
+                
                 socketio.emit('progress_update',
                               {'progress': 0, 'message': '正在初始化浏览器...' if not proxy_info else proxy_info})
 
@@ -679,10 +252,17 @@ def extract_contacts():
                 })
             finally:
                 if driver:
-                    driver.quit()
+                    try: driver.quit()
+                    except: pass
+                task_manager.unregister_task(task_id)
 
-    thread = threading.Thread(target=background_contact_extraction, args=(proxy,))
+    if not task_manager.can_start_task():
+        return jsonify({"status": "error", "message": "已达到最大并发任务数"}), 429
+
+    task_id = f"contact_{os.urandom(4).hex()}"
+    thread = threading.Thread(target=background_contact_extraction, args=(task_id, proxy))
     thread.daemon = True
+    task_manager.register_task(task_id, thread)
     thread.start()
 
     return jsonify({"status": "success", "message": "联系方式提取任务已启动..."})
@@ -696,11 +276,13 @@ def extract_contacts_from_db():
 
     proxy = request.form.get('proxy')
 
-    def background_db_contact_extraction(proxy=None):
+    def background_db_contact_extraction(task_id, proxy=None):
         with app.app_context():
-            # 修正：移除硬编码的 headless=True，由 chrome_driver.py 根据环境自动决定
-            driver, proxy_info = get_chrome_driver(proxy=proxy)
+            driver = None
             try:
+                driver, proxy_info = get_chrome_driver(proxy=proxy)
+                task_manager.update_driver(task_id, driver)
+                
                 # 获取有网站但没邮箱的记录
                 from db import get_db_connection, release_connection
                 conn = get_db_connection()
@@ -720,21 +302,35 @@ def extract_contacts_from_db():
                         'message': msg,
                         'business_data': data
                     })
+            except Exception as e:
+                print(f"[ERROR] DB Contact Extraction: {e}", file=sys.stderr)
+                socketio.emit('progress_update', {'progress': 100, 'message': f'提取出错: {e}'})
             finally:
-                driver.quit()
+                if driver:
+                    try: driver.quit()
+                    except: pass
+                task_manager.unregister_task(task_id)
 
-    thread = threading.Thread(target=background_db_contact_extraction, args=(proxy,))
+    if not task_manager.can_start_task():
+        return jsonify({"status": "error", "message": "已达到最大并发任务数"}), 429
+
+    task_id = f"db_contact_{os.urandom(4).hex()}"
+    thread = threading.Thread(target=background_db_contact_extraction, args=(task_id, proxy))
     thread.daemon = True
+    task_manager.register_task(task_id, thread)
     thread.start()
 
     return jsonify({"status": "success", "message": "数据库联系方式提取任务已启动..."})
 
-def background_target_contact_extraction(record_ids, proxy=None):
+def background_target_contact_extraction(task_id, record_ids, proxy=None):
     """后台定向联系方式提取"""
     with app.app_context():
-        # 修正：移除硬编码的 headless=True，由 chrome_driver.py 根据环境自动决定
-        driver, proxy_info = get_chrome_driver(proxy=proxy)
+        driver = None
         try:
+            driver, proxy_info = get_chrome_driver(proxy=proxy)
+            # 注册 driver
+            task_manager.update_driver(task_id, driver)
+            
             from contact_scraper import extract_contacts_by_ids
             for progress, name, data, msg in extract_contacts_by_ids(driver, record_ids):
                 socketio.emit('progress_update', {
@@ -743,8 +339,14 @@ def background_target_contact_extraction(record_ids, proxy=None):
                     'business_data': data
                 })
             socketio.emit('progress_update', {'progress': 100, 'message': '定向提取任务已完成'})
+        except Exception as e:
+            print(f"[ERROR] Target Extraction: {e}", file=sys.stderr)
+            socketio.emit('progress_update', {'progress': 100, 'message': f'提取出错: {e}'})
         finally:
-            driver.quit()
+            if driver:
+                try: driver.quit()
+                except: pass
+            task_manager.unregister_task(task_id)
 
 @app.route('/email')
 @app.route('/send_email_page')
@@ -840,8 +442,19 @@ def target_extract_contacts():
         return jsonify({"status": "error", "message": "没有选中的记录"}), 400
 
     # 启动后台线程进行定向爬取
-    thread = threading.Thread(target=background_target_contact_extraction, args=(record_ids, proxy))
+    if not task_manager.can_start_task():
+        return jsonify({"status": "error", "message": "已达到最大并发任务数"}), 429
+
+    task_id = f"target_{os.urandom(4).hex()}"
+    
+    # 包装任务函数以适配 task_manager
+    def wrapped_target_task(task_id, record_ids, proxy):
+        # 这里的原始函数没有 task_id 参数，所以我们在这里处理
+        background_target_contact_extraction(task_id, record_ids, proxy)
+
+    thread = threading.Thread(target=wrapped_target_task, args=(task_id, record_ids, proxy))
     thread.daemon = True
+    task_manager.register_task(task_id, thread)
     thread.start()
     
     return jsonify({"status": "success", "message": f"已针对 {len(record_ids)} 条记录启动定向提取任务"})

@@ -17,11 +17,8 @@ from utils.enterprise_logger import (
     create_logger
 )
 
-# 从 utils.py 导入导出函数（为了向后兼容）
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils_export import save_to_csv, save_to_excel, normalize_export_data, has_city_field
+# 从 exporter.py 导入导出函数
+from utils.exporter import save_to_csv, save_to_excel, normalize_export_data, has_city_field
 
 __all__ = [
     'DataDeduplicator',

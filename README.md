@@ -213,39 +213,36 @@ ports:
 - `./output:/app/output` - 导出文件存储
 - `./progress:/app/progress` - 进度文件存储
 
-### 邮件配置
-如需使用邮件发送功能，请在 `config/email_config.py` 中配置SMTP信息：
+### 📧 邮件发送配置
 
+系统支持通过 SMTP 发送营销邮件。为确保发送成功，建议优先使用国内邮箱（如 QQ、163）。
+
+#### 1. 获取授权码
+- **QQ 邮箱**: 设置 -> 账号 -> 开启 SMTP 服务 -> 生成**授权码**。
+- **Gmail**: Google 账号 -> 安全性 -> 两步验证 -> **应用专用密码**。
+
+#### 2. 修改配置 (`config.py`)
 ```python
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-SMTP_USERNAME = "your-email@gmail.com"
-SMTP_PASSWORD = "your-app-password"
+MAIL_SERVER = 'smtp.qq.com'  # Gmail 为 smtp.gmail.com
+MAIL_PORT = 465              # SSL 端口
+MAIL_USERNAME = 'your_email@qq.com'
+MAIL_PASSWORD = 'your_authorization_code'
 ```
 
-### 定时任务配置
+---
 
-系统支持自动化定时任务，可以在每天指定时间自动执行联系信息提取。
+## 🛠 高级部署与运维
 
-#### 功能特性
-- ✅ 自动执行：每天在指定时间自动运行联系信息提取任务
-- ✅ 灵活配置：可自定义执行时间（小时和分钟）
-- ✅ 启用/禁用：可随时启用或禁用定时任务
-- ✅ 手动触发：支持立即手动执行任务
-- ✅ 执行历史：记录每次任务执行的详细信息
+### 资源监控
+使用增强状态脚本实时监控服务器资源：
+```bash
+./enhanced-status.sh monitor
+```
 
-#### 使用方法
-1. 登录系统后，在"数据提取"页面左侧找到"⏰ 定时任务配置"区域
-2. 设置执行时间（小时 0-23，分钟 0-59）
-3. 勾选"启用定时任务"复选框
-4. 点击"💾 保存配置"按钮
-5. 系统将在每天指定时间自动执行任务
+### 自动化备份
+系统每天会自动执行数据库备份并保留最近 30 天的记录。备份文件存储在 `data/backups/` 目录下。
 
-#### 默认配置
-- 默认执行时间：每天凌晨 2:00
-- 默认状态：启用
-
-详细说明请参阅 [SCHEDULED_TASKS_README.md](SCHEDULED_TASKS_README.md)
+---
 
 ## 🔧 常见问题解决
 
