@@ -154,7 +154,6 @@ class ScraperService:
 
             except Exception as e:
                 _logger.log_error(e, {'context': 'service_execution', 'task_id': task_id})
-                print(f"[ERROR] Service Execution Error: {e}", file=sys.stderr)
                 self.emit_progress({'progress': 100, 'message': f'发生错误: {e}', 'error': True})
             finally:
                 if driver:

@@ -22,6 +22,10 @@ from email_sender import EmailSender
 from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count, update_send_failed, backup_database_daily
 from services.user_service import UserService
 from utils.auth import login_required
+from utils.enterprise_logger import get_logger
+
+# 初始化日志器
+_logger = get_logger('web-app')
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -141,7 +145,7 @@ def start_extraction():
                     country_data = json.load(f)
                     config['cities_list'] = country_data.get(config['country'], {}).get('cities', [])
         except Exception as e:
-            print(f"[ERROR] 加载国家数据失败: {e}", file=sys.stderr)
+            _logger.log_error(e, {'context': 'load_country_data'})
 
     task_id = f"extract_{os.urandom(4).hex()}"
     from scraper import reset_stop_flag
@@ -187,7 +191,7 @@ def stop_extraction():
             "message": "停止信号已发送，爬取将在当前商家处理完成后停止"
         })
     except Exception as e:
-        print(f"停止爬取失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'stop_extraction'})
         return jsonify({"status": "error", "message": f"停止爬取失败: {e}"}), 500
 
 
@@ -249,10 +253,10 @@ def extract_contacts():
 
                 # 注意：由于在contact_scraper.py中已经实时保存到数据库，这里不再重复保存
                 # 保留此注释是为了说明数据已经在提取过程中实时保存了
-                print("[INFO] 联系方式提取完成，数据已在提取过程中实时保存到数据库", file=sys.stderr)
+                _logger.log_info("联系方式提取完成，数据已在提取过程中实时保存到数据库")
 
             except Exception as e:
-                print(f"联系方式提取任务发生异常: {e}", file=sys.stderr)
+                _logger.log_error(e, {'context': 'contact_extraction_task'})
                 socketio.emit('progress_update', {
                     'progress': 100,
                     'message': f'联系方式提取出错: {e}'
@@ -310,7 +314,7 @@ def extract_contacts_from_db():
                         'business_data': data
                     })
             except Exception as e:
-                print(f"[ERROR] DB Contact Extraction: {e}", file=sys.stderr)
+                _logger.log_error(e, {'context': 'db_contact_extraction_task'})
                 socketio.emit('progress_update', {'progress': 100, 'message': f'提取出错: {e}'})
             finally:
                 if driver:
@@ -347,7 +351,7 @@ def background_target_contact_extraction(task_id, record_ids, proxy=None):
                 })
             socketio.emit('progress_update', {'progress': 100, 'message': '定向提取任务已完成'})
         except Exception as e:
-            print(f"[ERROR] Target Extraction: {e}", file=sys.stderr)
+            _logger.log_error(e, {'context': 'target_extraction_task'})
             socketio.emit('progress_update', {'progress': 100, 'message': f'提取出错: {e}'})
         finally:
             if driver:
@@ -402,7 +406,7 @@ def save_business_data():
         save_business_data_to_db(business_data)
         return jsonify({"status": "success", "message": "商家数据保存成功"})
     except Exception as e:
-        print(f"保存商家数据失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'save_business_data_route'})
         return jsonify({"status": "error", "message": f"保存商家数据失败: {e}"}), 500
 # 新增历史记录页面路由
 @app.route('/history')
@@ -422,7 +426,7 @@ def get_history():
     query = request.args.get('query', '')
     email_filter = request.args.get('filter', 'all')  # 获取筛选参数: all, has_email, no_email
     send_status = request.args.get('send_status', 'all')  # 获取发送状态筛选: all, sent, pending
-    print(f"[DEBUG] get_history params: page={page}, size={size}, query='{query}', filter={email_filter}, send_status={send_status}", file=sys.stderr)
+    _logger.log_info(f"get_history params: page={page}, size={size}, query='{query}', filter={email_filter}, send_status={send_status}")
     try:
         result = get_history_records(page=page, per_page=size, search=query, email_filter=email_filter, send_status_filter=send_status)
         return jsonify({
@@ -432,7 +436,7 @@ def get_history():
             "total": result['total']
         })
     except Exception as e:
-        print(f"查询历史记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_history_route'})
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -482,7 +486,7 @@ def update_send_count_route():
         update_send_count(emails)
         return jsonify({"status": "success", "message": "Send counts updated successfully"})
     except Exception as e:
-        print(f"更新发送次数失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'update_send_count_route'})
         return jsonify({"status": "error", "message": f"Failed to update send counts: {e}"}), 500
 
 
@@ -536,9 +540,7 @@ def export_excel():
     except json.JSONDecodeError:
         return jsonify({"status": "error", "message": "无效的 columns 参数"}), 400
     except Exception as e:
-        print(f"导出 Excel 失败: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
+        _logger.log_error(e, {'context': 'export_excel_route'})
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/auto_scraper_facebook_email', methods=['POST'])
@@ -636,7 +638,7 @@ def export_records_excel():
         filename = f'business_data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
         response.headers['Content-Disposition'] = f'attachment; filename={filename}'
         
-        print(f"[EXPORT] 导出 {len(records)} 条记录到 {filename}", file=sys.stderr)
+        _logger.log_info(f"[EXPORT] 导出 {len(records)} 条记录到 {filename}")
         return response
         
     except Exception as e:
@@ -676,7 +678,7 @@ def get_countries_api():
         }
         return jsonify(default_data)
     except Exception as e:
-        print(f"获取国家城市数据失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_countries_api'})
         return jsonify({"error": str(e)}), 500
 
 
@@ -692,7 +694,7 @@ def get_cities_api(country_code):
                     return jsonify({"cities": data[country_code].get("cities", [])})
         return jsonify({"cities": []})
     except Exception as e:
-        print(f"获取城市数据失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_cities_api'})
         return jsonify({"error": str(e)}), 500
 
 

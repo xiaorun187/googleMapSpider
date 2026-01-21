@@ -9,16 +9,18 @@ from selenium.webdriver.common.keys import Keys
 # 导入SQLite数据库模块
 import db as db_module
 
+import json
+import os
+from datetime import datetime
+import re
+
 # 导入优化模块
 from utils.enterprise_logger import get_logger, LogLevel
 from utils.rate_limiter import RateLimiter
 from utils.smart_wait import SmartWaitStrategy
 from utils.data_integrity_validator import DataIntegrityValidator
-
-import json
-import os
-from datetime import datetime
-import re
+# 导入公共 Selenium 助手
+from utils.selenium_helpers import wait_for_element, wait_for_page_load, wait_for_network_idle, TimeoutConfig
 
 # 初始化全局组件
 _logger = get_logger('google-map-spider')
@@ -38,7 +40,7 @@ def set_stop_extraction(stop: bool):
     global _stop_extraction_flag
     with _stop_lock:
         _stop_extraction_flag = stop
-        print(f"停止爬取标志已设置为: {stop}")
+        _logger.log_info(f"停止爬取标志已设置为: {stop}")
 
 
 def should_stop_extraction() -> bool:
@@ -177,86 +179,7 @@ _progress_manager = ProgressManager()
 #     pass
 
 
-def wait_for_element(driver, selector, timeout=5, condition=EC.presence_of_element_located):
-    """智能等待元素出现，可指定等待条件"""
-    try:
-        element = WebDriverWait(driver, timeout).until(
-            condition((By.CSS_SELECTOR, selector))
-        )
-        return element
-    except Exception as e:
-        print(f"未找到元素 {selector}: {e}", file=sys.stderr)
-        return None
-
-def wait_for_page_load(driver, timeout=10):
-    """等待页面完全加载"""
-    try:
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        return True
-    except Exception as e:
-        print(f"页面加载超时: {e}", file=sys.stderr)
-        return False
-
-def wait_for_network_idle(driver, timeout=15):
-    """
-    等待网络请求完成（需要Chrome DevTools Protocol支持）
-    
-    改进：
-    - 添加具体的 WebDriverException 捕获
-    - 处理 CDP 命令不支持的情况
-    - 使用结构化日志记录
-    """
-    from selenium.common.exceptions import WebDriverException
-    
-    try:
-        # 检查浏览器是否支持 Network API
-        if not hasattr(driver, 'execute_cdp_cmd'):
-            _logger.log_warning("浏览器不支持 CDP 命令，回退到页面加载等待")
-            return wait_for_page_load(driver, timeout)
-        
-        # 启用网络监控
-        try:
-            driver.execute_cdp_cmd('Network.enable', {})
-        except WebDriverException as e:
-            _logger.log_warning(f"CDP Network.enable 失败: {e}, 回退到页面加载等待")
-            return wait_for_page_load(driver, timeout)
-        
-        # 等待网络空闲（500ms内无请求）
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            try:
-                # 注意：Network.getAllRequests 可能在某些 Chromium 版本不可用
-                # 使用更保守的方式检查
-                requests = driver.execute_cdp_cmd('Network.getAllRequests', {})
-                # 检查是否有进行中的请求
-                has_in_flight = any(req.get('status') == 'pending' for req in requests)
-                if not has_in_flight:
-                    # 等待 500ms 确认网络空闲
-                    time.sleep(0.5)
-                    # 再次检查
-                    requests = driver.execute_cdp_cmd('Network.getAllRequests', {})
-                    has_in_flight = any(req.get('status') == 'pending' for req in requests)
-                    if not has_in_flight:
-                        driver.execute_cdp_cmd('Network.disable', {})
-                        return True
-                time.sleep(1)
-            except WebDriverException:
-                # CDP 命令失败，跳出循环使用回退方案
-                break
-        
-        # 清理：尝试禁用网络监控
-        try:
-            driver.execute_cdp_cmd('Network.disable', {})
-        except WebDriverException:
-            pass  # 忽略清理错误
-            
-    except Exception as e:
-        _logger.log_warning(f"网络空闲等待失败: {e}, 回退到页面加载等待")
-    
-    # 如果 CDP 不可用或失败，回退到页面加载完成等待
-    return wait_for_page_load(driver, timeout)
+# 移除本地冗余函数 wait_for_element, wait_for_page_load, wait_for_network_idle，改用 utils.selenium_helpers
 
 def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=500):
     """
@@ -341,13 +264,13 @@ def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=50
         # 检查是否达到目标数量
         if current_link_count >= target_count:
             _logger.log_progress(current_link_count, target_count, f"已达到目标条数 {target_count}")
-            print(f"已达到或超过目标条数 {target_count}，停止滚动")
+            _logger.log_info(f"已达到或超过目标条数 {target_count}，停止滚动")
             break
         
         # 检查是否到达页面底部
         if is_at_bottom():
             _logger.log_progress(current_link_count, target_count, "检测到页面底部")
-            print("检测到页面底部，停止滚动")
+            _logger.log_info("检测到页面底部，停止滚动")
             break
 
         # 执行滚动
@@ -364,12 +287,12 @@ def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=50
         # 检查是否有新链接
         if after_count == before_count:
             no_new_links_count += 1
-            print(f"无新链接 ({no_new_links_count}/{max_no_new_links})")
+            _logger.log_info(f"无新链接 ({no_new_links_count}/{max_no_new_links})")
             
             # 连续多次无新链接才停止
             if no_new_links_count >= max_no_new_links:
                 _logger.log_progress(after_count, target_count, f"连续{max_no_new_links}次无新链接")
-                print(f"连续{max_no_new_links}次无新链接，停止滚动")
+                _logger.log_info(f"连续{max_no_new_links}次无新链接，停止滚动")
                 break
         else:
             # 有新链接，重置计数器
@@ -379,7 +302,7 @@ def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=50
     # 转换为列表并截取目标数量
     business_links = list(business_links)[:target_count]
     _logger.log_extraction(driver.current_url, len(business_links), 0)
-    print(f"滚动完成，最终找到 {len(business_links)} 个唯一商家链接")
+    _logger.log_info(f"滚动完成，最终找到 {len(business_links)} 个唯一商家链接")
     yield 50, None, business_links, "滚动完成"
 
 def extract_single_business_info(driver):
@@ -396,20 +319,20 @@ def extract_single_business_info(driver):
         if website_elem:
             href = website_elem.get_attribute('href')
             business_data['website'] = href
-            print(f"提取到网站: {href}")
+            _logger.log_info(f"提取到网站: {href}")
         else:
-            print(f"未找到 {name} 的网站元素，使用备用选择器")
+            _logger.log_info(f"未找到 {name} 的网站元素，使用备用选择器")
             website_elem = wait_for_element(driver, 'a[href^="http"]:not([href*="google.com"])')
             if website_elem:
                 href = website_elem.get_attribute('href')
                 business_data['website'] = href
-                print(f"备用选择器提取到网站: {href}")
+                _logger.log_info(f"备用选择器提取到网站: {href}")
 
         results.append(business_data)
-        print(f"成功提取 {name} 的信息: {business_data}")
+        _logger.log_info(f"成功提取 {name} 的信息: {business_data}")
         return results, f"完成单个商家数据提取: {name}"
     except Exception as e:
-        print(f"提取单个商家信息时出错: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'extract_single_business_info'})
         return results, f"提取单个商家信息时出错: {e}"
 
 def navigate_to_city_and_search(driver, city, product):
@@ -418,7 +341,7 @@ def navigate_to_city_and_search(driver, city, product):
     
     修复：增加城市定位等待时间，确保地图完全定位后再搜索商品
     """
-    print(f"开始两步搜索：城市={city}, 商品={product}")
+    _logger.log_info(f"开始两步搜索：城市={city}, 商品={product}")
     
     # 第一步：打开 Google Maps 并搜索城市
     yield 5, None, None, f"正在打开 Google Maps..."
@@ -632,12 +555,12 @@ def extract_business_detail_with_retry(driver, link_href, max_retries=3):
             if attempt < max_retries:
                 # 指数退避等待
                 delay = calculate_retry_delay(attempt)
-                print(f"提取失败 (尝试 {attempt}/{max_retries}): {e}，{delay}秒后重试")
+                _logger.log_info(f"提取失败 (尝试 {attempt}/{max_retries}): {e}，{delay}秒后重试")
                 time.sleep(delay)
             else:
                 # 记录封禁
                 if _rate_limiter.record_block():
-                    print("连续多次失败，暂停60秒...")
+                    _logger.log_warning("连续多次失败，暂停60秒...")
                     _rate_limiter.pause_for_block()
     
     return None, last_error
@@ -666,22 +589,22 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
     
     # 新模式：城市 + 商品两步搜索
     if city and product:
-        print(f"使用两步搜索模式：城市={city}, 商品={product}")
+        _logger.log_info(f"使用两步搜索模式：城市={city}, 商品={product}")
         task_key = f"{product}_in_{city}"
         
         # 检查是否有保存的进度可以恢复
         saved_progress = _progress_manager.load_progress(task_key)
         if saved_progress:
-            print(f"发现保存的进度，保存时间: {saved_progress.get('saved_at')}")
+            _logger.log_info(f"发现保存的进度，保存时间: {saved_progress.get('saved_at')}")
             start_index = saved_progress.get('current_index', 0)
             recovered_results = saved_progress.get('results', [])
             recovered_links = saved_progress.get('business_links', [])
-            print(f"从索引 {start_index} 恢复，已有 {len(recovered_results)} 条结果")
+            _logger.log_info(f"从索引 {start_index} 恢复，已有 {len(recovered_results)} 条结果")
             yield 5, None, None, f"从保存点恢复，已有 {len(recovered_results)} 条数据"
         elif remember_position:
             saved_position = db_module.get_last_position(task_key)
             start_index = saved_position if saved_position is not None else 0
-            print(f"记住位置已启用，从索引 {start_index} 开始提取。")
+            _logger.log_info(f"记住位置已启用，从索引 {start_index} 开始提取。")
             limit = limit + start_index
         
         # 如果没有恢复的链接，执行两步搜索
@@ -692,12 +615,12 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                     return
     else:
         # 旧模式：直接访问 URL
-        print(f"正在访问 URL: {search_url}，目标提取数量: {limit}，记住位置: {remember_position}")
+        _logger.log_info(f"正在访问 URL: {search_url}，目标提取数量: {limit}，记住位置: {remember_position}")
         
         if remember_position and search_url:
             saved_position = db_module.get_last_position(search_url)
             start_index = saved_position if saved_position is not None else 0
-            print(f"记住位置已启用，从索引 {start_index} 开始提取。")
+            _logger.log_info(f"记住位置已启用，从索引 {start_index} 开始提取。")
             limit = limit + start_index
         
         try:
@@ -715,7 +638,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             return
 
         if search_url and "/place/" in search_url:
-            print("检测到单个商家页面，直接提取信息...")
+            _logger.log_info("检测到单个商家页面，直接提取信息...")
             results, message = extract_single_business_info(driver)
             yield 50, None, None, "正在提取单个商家数据"
             yield 100, None, results[0] if results else None, message
@@ -724,10 +647,10 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
     # 如果有恢复的链接，使用恢复的链接；否则滚动加载
     if recovered_links:
         business_links = recovered_links
-        print(f"使用恢复的 {len(business_links)} 个商家链接")
+        _logger.log_info(f"使用恢复的 {len(business_links)} 个商家链接")
         yield 50, None, None, f"使用恢复的 {len(business_links)} 个商家链接"
     else:
-        print("开始滚动页面以加载更多商家...")
+        _logger.log_info("开始滚动页面以加载更多商家...")
         business_links = []
         # 优化：减少滚动延迟时间，从3秒减少到1秒
         for progress, _, data, message in scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=limit):
@@ -736,7 +659,6 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             yield progress, None, None, message
 
     if not business_links:
-        print("未找到任何商家链接")
         _logger.log_warning("未找到任何商家链接")
         yield 100, None, None, "未找到任何商家链接"
         return
@@ -748,7 +670,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
     consecutive_failures = 0  # 连续失败计数
     max_consecutive_failures = 5  # 连续失败阈值，触发进度保存
     
-    print(f"共有 {total} 个商家链接可供提取，从索引 {start_index} 开始")
+    _logger.log_info(f"共有 {total} 个商家链接可供提取，从索引 {start_index} 开始")
     _logger.log_progress(len(results), total, f"开始提取 {total} 个商家")
     
     # 优化：批量保存位置，减少数据库操作次数
@@ -765,7 +687,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 'reason': reason
             }
             _progress_manager.save_progress(task_key, progress_data)
-            print(f"关键进度已保存: {reason}")
+            _logger.log_info(f"关键进度已保存: {reason}")
     
     try:
         for i, link_href in enumerate(business_links[start_index:]):
@@ -773,13 +695,13 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             
             # 检查是否应该停止爬取
             if should_stop_extraction():
-                print(f"收到停止信号，已提取 {len(results)} 条数据")
+                _logger.log_info(f"收到停止信号，已提取 {len(results)} 条数据")
                 save_critical_progress(current_index, "用户手动停止")
                 yield 100, None, None, f"爬取已停止，已保存 {len(results)} 条数据"
                 return
             
             if len(results) >= limit:
-                print(f"已提取 {limit} 条数据，停止提取")
+                _logger.log_info(f"已提取 {limit} 条数据，停止提取")
                 break
 
             # 发送提取状态
@@ -792,7 +714,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             if business_data:
                 # 检查是否重复
                 if results and business_data['name'] == results[-1]['name']:
-                    print(f"重复提取同一商家: {business_data['name']}，跳过")
+                    _logger.log_info(f"重复提取同一商家: {business_data['name']}，跳过")
                     continue
                 
                 # 添加 city 和 product 字段到商家数据
@@ -803,12 +725,12 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
                 
                 results.append(business_data)
                 consecutive_failures = 0  # 重置连续失败计数
-                print(f"成功提取 {business_data['name']} 的信息")
+                _logger.log_info(f"成功提取 {business_data['name']} 的信息")
                 yield progress, business_data['name'], business_data, f"成功提取: {business_data['name']}"
             else:
                 failed_count += 1
                 consecutive_failures += 1
-                print(f"提取 {link_href} 失败: {error}")
+                _logger.log_info(f"提取 {link_href} 失败: {error}")
                 _logger.log_extraction(link_href, 0, 1)
                 
                 # 连续失败达到阈值，保存进度
@@ -821,7 +743,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
             if remember_position and (current_index + 1) % position_save_interval == 0:
                 position_key = task_key if task_key else search_url
                 db_module.save_last_position(position_key, current_index + 1)
-                print(f"已保存当前位置: {current_index + 1}")
+                _logger.log_info(f"已保存当前位置: {current_index + 1}")
                 
     except Exception as e:
         # 关键错误时保存进度
@@ -841,7 +763,7 @@ def extract_business_info(driver, search_url, limit=500, remember_position=False
     
     # 生成验证摘要
     summary = validator.generate_summary(validation_report)
-    print(summary)
+    _logger.log_info(f"数据质量核查摘要:\n{summary}")
     _logger.log_progress(
         len(results), 
         total, 

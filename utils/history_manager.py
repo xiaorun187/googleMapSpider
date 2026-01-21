@@ -251,8 +251,7 @@ class HistoryManager:
         finally:
             if cursor:
                 cursor.close()
-            if connection:
-                connection.close()
+            release_connection(connection)
     
     def delete_record(self, record_id: int) -> bool:
         """

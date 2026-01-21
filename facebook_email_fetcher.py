@@ -1,24 +1,14 @@
-import sys
 import time
-import re
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
-from db import save_business_data_to_db, update_business_email  # 导入数据库保存和更新函数
+from db import save_business_data_to_db, update_business_email, get_facebook_non_email
 from chrome_driver import get_chrome_driver
-from db import get_facebook_non_email
+from utils.selenium_helpers import wait_for_element
+from utils.enterprise_logger import get_logger
 
-def wait_for_element(driver, selector, timeout=5):
-    try:
-        element = WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-        )
-        return element
-    except Exception as e:
-        print(f"未找到元素 {selector}: {e}", file=sys.stderr)
-        return None
+# 初始化日志器
+_logger = get_logger('facebook-fetcher')
+
+import re
+
 
 def scraper_facebook_email(proxy):
     # 从数据库返回邮箱为空，且有 facebook URL 的记录
@@ -29,7 +19,7 @@ def scraper_facebook_email(proxy):
         if facebook_url and business_id:
             extract_business_info(proxy, facebook_url=facebook_url, business_id=business_id)
         else:
-            print(f"记录 ID {r.get('id')} 没有 Facebook URL，跳过。")
+            _logger.log_info(f"记录 ID {r.get('id')} 没有 Facebook URL，跳过。")
 def extract_single_facebook_email_info(driver, facebook_url):
     try:
         driver.get(facebook_url)
@@ -39,7 +29,7 @@ def extract_single_facebook_email_info(driver, facebook_url):
         emails = re.findall(email_pattern, page_source)
         return emails
     except Exception as e:
-        print(f"处理 Facebook URL: {facebook_url} 时发生错误: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'extract_fb_email', 'url': facebook_url})
         return []  # 确保始终返回列表类型
 def extract_business_info(proxy, facebook_url, business_id):
     driver, proxy_info = get_chrome_driver(proxy)
@@ -57,18 +47,18 @@ def extract_business_info(proxy, facebook_url, business_id):
             # 如果找到多个邮箱，可以根据一些策略选择最可能的那个
             # 这里我们简单地选择第一个找到的邮箱
             email_address = emails[0]
-            print(f"从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址: {email_address}")
+            _logger.log_info(f"从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址: {email_address}")
 
             update_success = update_business_email(business_id, email_address)
             if update_success:
-                print(f"成功更新数据库中 ID 为 {business_id} 的邮箱为: {email_address}")
+                _logger.log_info(f"成功更新数据库中 ID 为 {business_id} 的邮箱为: {email_address}")
             else:
-                print(f"更新数据库中 ID 为 {business_id} 的邮箱失败。")
+                _logger.log_warning(f"更新数据库中 ID 为 {business_id} 的邮箱失败。")
         else:
-            print(f"未能从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址。")
+            _logger.log_info(f"未能从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址。")
 
     except Exception as e:
-        print(f"处理 Facebook URL: {facebook_url} 时发生错误: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'fb_fetch_task', 'url': facebook_url, 'id': business_id})
     finally:
         driver.quit()
 

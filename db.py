@@ -11,6 +11,10 @@ from typing import Optional
 # SQLite database file path
 import shutil
 from datetime import datetime
+from utils.enterprise_logger import get_logger
+
+# 初始化日志器
+_logger = get_logger('database-manager')
 
 # SQLite database file path
 import os
@@ -41,12 +45,12 @@ def backup_database_daily():
                     src.backup(dst)
                 dst.close()
                 src.close()
-                print(f"[BACKUP] Database backed up to {backup_file}", file=sys.stderr)
+                _logger.log_info(f"Database backed up to {backup_file}")
             except Exception as e:
                 # Fallback to file copy
-                print(f"[BACKUP WARNING] SQLite backup API failed: {e}. Falling back to file copy.", file=sys.stderr)
+                _logger.log_warning(f"SQLite backup API failed: {e}. Falling back to file copy.")
                 shutil.copy2(DB_FILE, backup_file)
-                print(f"[BACKUP] Database copied to {backup_file}", file=sys.stderr)
+                _logger.log_info(f"Database copied to {backup_file}")
                 
             # Cleanup old backups (keep last 30 days)
             backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.startswith("business_") and f.endswith(".db")])
@@ -54,14 +58,14 @@ def backup_database_daily():
                 for old_backup in backups[:-30]:
                     try:
                         os.remove(os.path.join(BACKUP_DIR, old_backup))
-                        print(f"[BACKUP] Removed old backup: {old_backup}", file=sys.stderr)
+                        _logger.log_info(f"Removed old backup: {old_backup}")
                     except OSError:
                         pass
         else:
-            print(f"[BACKUP] Backup for today already exists: {backup_file}", file=sys.stderr)
+            _logger.log_info(f"Backup for today already exists: {backup_file}")
             
     except Exception as e:
-        print(f"[BACKUP ERROR] Backup process failed: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'db_backup'})
 
 
 
@@ -100,7 +104,7 @@ def _init_connection_pool():
                 conn.execute("PRAGMA synchronous=NORMAL")
                 _connection_pool.put(conn)
             except Error as e:
-                print(f"初始化连接池失败: {e}", file=sys.stderr)
+                _logger.log_error(e, {'context': 'init_connection_pool'})
         _pool_initialized = True
 
 
@@ -115,7 +119,7 @@ def get_db_connection():
             conn = sqlite3.connect(DB_FILE, check_same_thread=False)
             return conn
         except Error as e:
-            print(f"Error connecting to database: {e}", file=sys.stderr)
+            _logger.log_error(e, {'context': 'get_db_connection'})
             return None
 
 
@@ -245,7 +249,7 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_history_start ON task_execution_history(start_time DESC)")
         
         connection.commit()
-        print("数据库初始化完成", file=sys.stderr)
+        _logger.log_info("数据库初始化完成")
 
 
 # 启动时初始化数据库
@@ -318,7 +322,7 @@ def save_single_business_to_db(business: dict) -> dict:
     if not is_valid:
         result['error'] = error_msg
         result['action'] = 'skipped'
-        print(f"[DB] 数据验证失败 [{result['name']}]: {error_msg}", file=sys.stderr)
+        _logger.log_warning(f"数据验证失败 [{result['name']}]: {error_msg}")
         return result
     
     connection = None
@@ -328,7 +332,7 @@ def save_single_business_to_db(business: dict) -> dict:
         connection = get_db_connection()
         if not connection:
             result['error'] = "无法获取数据库连接"
-            print("[DB ERROR] 无法获取数据库连接", file=sys.stderr)
+            _logger.log_error(Exception(result['error']), {'context': 'save_single_business'})
             return result
         
         cursor = connection.cursor()
@@ -374,7 +378,7 @@ def save_single_business_to_db(business: dict) -> dict:
             result['success'] = True
             result['action'] = 'updated'
             result['record_id'] = existing['id']
-            print(f"[DB] 更新记录 [{name}] ID={existing['id']}", file=sys.stderr)
+            _logger.log_info(f"更新记录 [{name}] ID={existing['id']}")
         else:
             # 插入新记录
             unique_id = generate_unique_id()
@@ -390,7 +394,7 @@ def save_single_business_to_db(business: dict) -> dict:
             result['success'] = True
             result['action'] = 'inserted'
             result['record_id'] = cursor.lastrowid
-            print(f"[DB] 插入新记录 [{name}] ID={result['record_id']}", file=sys.stderr)
+            _logger.log_info(f"插入新记录 [{name}] ID={result['record_id']}")
         
     except Error as e:
         if connection:
@@ -399,7 +403,7 @@ def save_single_business_to_db(business: dict) -> dict:
             except Exception:
                 pass
         result['error'] = str(e)
-        print(f"[DB ERROR] 保存失败 [{result['name']}]: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'save_single_business', 'name': result['name']})
     finally:
         if cursor:
             try:
@@ -432,7 +436,7 @@ def save_business_data_to_db(data: list, product: str = '', city: str = '') -> d
     }
     
     if not data or not isinstance(data, list):
-        print("[DB] 没有数据需要保存", file=sys.stderr)
+        _logger.log_info("没有数据需要保存")
         return stats
     
     for business in data:
@@ -458,7 +462,7 @@ def save_business_data_to_db(data: list, product: str = '', city: str = '') -> d
         else:
             stats['errors'] += 1
     
-    print(f"[DB] 批量保存完成: 插入={stats['inserted']}, 更新={stats['updated']}, 跳过={stats['skipped']}, 错误={stats['errors']}", file=sys.stderr)
+    _logger.log_info(f"批量保存完成: 插入={stats['inserted']}, 更新={stats['updated']}, 跳过={stats['skipped']}, 错误={stats['errors']}")
     return stats
 
 
@@ -512,7 +516,7 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
             conditions.append("(name LIKE ? OR email LIKE ? OR city LIKE ? OR product LIKE ?)")
             search_param = f"%{search}%"
             params.extend([search_param, search_param, search_param, search_param])
-            print(f"[DEBUG] Search conditions: {conditions}, params: {params}", file=sys.stderr)
+            _logger.log_debug(f"Search conditions: {conditions}, params: {params}")
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
@@ -545,7 +549,7 @@ def get_history_records(page: int = 1, per_page: int = 20, search: str = '',
             result['records'].append(record)
         
     except Error as e:
-        print(f"[DB ERROR] 获取历史记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_history_records'})
     finally:
         if cursor:
             cursor.close()
@@ -587,11 +591,11 @@ def update_send_count(emails: list) -> bool:
         """, emails)
         connection.commit()
         updated_count = cursor.rowcount
-        print(f"[DB] 更新发送次数: {updated_count} 条记录 (邮箱: {emails})", file=sys.stderr)
+        _logger.log_info(f"更新发送次数: {updated_count} 条记录 (邮箱: {emails})")
         return updated_count > 0
         
     except Error as e:
-        print(f"[DB ERROR] 更新发送次数失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'update_send_count'})
         if connection:
             connection.rollback()
         return False
@@ -632,11 +636,11 @@ def update_send_failed(emails: list) -> bool:
         """, emails)
         connection.commit()
         updated_count = cursor.rowcount
-        print(f"[DB] 更新发送失败状态: {updated_count} 条记录 (邮箱: {emails})", file=sys.stderr)
+        _logger.log_info(f"更新发送失败状态: {updated_count} 条记录 (邮箱: {emails})")
         return updated_count > 0
         
     except Error as e:
-        print(f"[DB ERROR] 更新发送失败状态失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'update_send_failed'})
         if connection:
             connection.rollback()
         return False
@@ -670,7 +674,7 @@ def get_last_position(url: str) -> int:
         return row[0] if row else 0
         
     except Error as e:
-        print(f"[DB ERROR] 获取位置失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_last_position'})
         return 0
     finally:
         if cursor:
@@ -706,7 +710,7 @@ def save_last_position(url: str, position: int) -> bool:
         return True
         
     except Error as e:
-        print(f"[DB ERROR] 保存位置失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'save_last_position'})
         if connection:
             connection.rollback()
         return False
@@ -743,7 +747,7 @@ def get_facebook_non_email() -> list:
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
         
     except Error as e:
-        print(f"[DB ERROR] 获取Facebook记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_facebook_non_email'})
         return []
     finally:
         if cursor:
@@ -780,7 +784,7 @@ def update_business_email(record_id: int, email: str) -> bool:
         return cursor.rowcount > 0
         
     except Error as e:
-        print(f"[DB ERROR] 更新邮箱失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'update_business_email'})
         if connection:
             connection.rollback()
         return False
@@ -814,7 +818,7 @@ def delete_business_record(record_id: int) -> bool:
         return cursor.rowcount > 0
         
     except Error as e:
-        print(f"[DB ERROR] 删除记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'delete_business_record'})
         if connection:
             connection.rollback()
         return False
@@ -850,11 +854,11 @@ def delete_records_batch(record_ids: list) -> int:
         cursor.execute(f"DELETE FROM business_records WHERE id IN ({placeholders})", record_ids)
         count = cursor.rowcount
         connection.commit()
-        print(f"[DB] 批量删除: {count} 条记录", file=sys.stderr)
+        _logger.log_info(f"批量删除: {count} 条记录")
         return count
         
     except Error as e:
-        print(f"[DB ERROR] 批量删除失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'delete_records_batch'})
         if connection:
             connection.rollback()
         return 0
@@ -887,7 +891,7 @@ def add_business_record(data: dict) -> Optional[int]:
         connection.commit()
         return cursor.lastrowid
     except Error as e:
-        print(f"[DB ERROR] 新增记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'add_business_record'})
         return None
     finally:
         if cursor: cursor.close()
@@ -916,7 +920,7 @@ def update_business_record(record_id: int, data: dict) -> bool:
         connection.commit()
         return cursor.rowcount > 0
     except Error as e:
-        print(f"[DB ERROR] 更新记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'update_business_record'})
         return False
     finally:
         if cursor: cursor.close()
@@ -969,7 +973,7 @@ def get_ai_configuration() -> Optional[dict]:
         return None
         
     except Error as e:
-        print(f"[DB ERROR] 获取AI配置失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_ai_configuration'})
         return None
     finally:
         if cursor:
@@ -1042,11 +1046,11 @@ def save_ai_configuration(config: dict) -> bool:
             ))
         
         connection.commit()
-        print("[DB] AI配置保存成功", file=sys.stderr)
+        _logger.log_info("AI配置保存成功")
         return True
         
     except Error as e:
-        print(f"[DB ERROR] 保存AI配置失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'save_ai_configuration'})
         if connection:
             connection.rollback()
         return False
@@ -1087,7 +1091,7 @@ def get_all_business_records() -> list:
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
         
     except Error as e:
-        print(f"[DB ERROR] 获取所有记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_all_business_records'})
         return []
     finally:
         if cursor:
@@ -1133,7 +1137,7 @@ def get_records_by_ids(record_ids: list) -> list:
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
         
     except Error as e:
-        print(f"[DB ERROR] 根据ID获取记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_records_by_ids'})
         return []
     finally:
         if cursor:
@@ -1175,7 +1179,7 @@ def get_analytics_summary() -> dict:
             'sent_success': sent_success
         }
     except Error as e:
-        print(f"[DB ERROR] 获取统计信息失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_analytics_summary'})
         return {}
     finally:
         if cursor: cursor.close()
@@ -1227,7 +1231,7 @@ def get_task_config(task_name: str = 'contact_extraction') -> Optional[dict]:
         return None
         
     except Error as e:
-        print(f"[DB ERROR] 获取任务配置失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_task_config'})
         return None
     finally:
         if cursor:
@@ -1281,11 +1285,11 @@ def save_task_config(task_name: str, schedule_hour: int, schedule_minute: int, e
             """, (task_name, schedule_hour, schedule_minute, int(enabled)))
         
         connection.commit()
-        print(f"[DB] 任务配置保存成功: {task_name} at {schedule_hour:02d}:{schedule_minute:02d}, enabled={enabled}", file=sys.stderr)
+        _logger.log_info(f"任务配置保存成功: {task_name} at {schedule_hour:02d}:{schedule_minute:02d}, enabled={enabled}")
         return True
         
     except Error as e:
-        print(f"[DB ERROR] 保存任务配置失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'save_task_config'})
         if connection:
             connection.rollback()
         return False
@@ -1333,11 +1337,11 @@ def create_execution_record(task_name: str, start_time: str) -> Optional[int]:
         
         connection.commit()
         record_id = cursor.lastrowid
-        print(f"[DB] 创建任务执行记录: ID={record_id}, task={task_name}", file=sys.stderr)
+        _logger.log_info(f"创建任务执行记录: ID={record_id}, task={task_name}")
         return record_id
         
     except Error as e:
-        print(f"[DB ERROR] 创建执行记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'create_execution_record'})
         if connection:
             connection.rollback()
         return None
@@ -1386,11 +1390,11 @@ def update_execution_record(record_id: int, end_time: str, status: str,
         """, (end_time, status, records_processed, records_success, records_failed, error_message, record_id))
         
         connection.commit()
-        print(f"[DB] 更新任务执行记录: ID={record_id}, status={status}", file=sys.stderr)
+        _logger.log_info(f"更新任务执行记录: ID={record_id}, status={status}")
         return True
         
     except Error as e:
-        print(f"[DB ERROR] 更新执行记录失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'update_execution_record'})
         if connection:
             connection.rollback()
         return False
@@ -1460,7 +1464,7 @@ def get_execution_history(task_name: str = None, limit: int = 10) -> list:
         return results
         
     except Error as e:
-        print(f"[DB ERROR] 获取执行历史失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'get_execution_history'})
         return []
     finally:
         if cursor:
@@ -1501,13 +1505,13 @@ def cleanup_old_execution_history(keep_count: int = 100) -> int:
             cursor.execute("DELETE FROM task_execution_history WHERE id < ?", (min_id,))
             deleted_count = cursor.rowcount
             connection.commit()
-            print(f"[DB] 清理旧执行历史: 删除 {deleted_count} 条记录", file=sys.stderr)
+            _logger.log_info(f"清理旧执行历史: 删除 {deleted_count} 条记录")
             return deleted_count
         
         return 0
         
     except Error as e:
-        print(f"[DB ERROR] 清理执行历史失败: {e}", file=sys.stderr)
+        _logger.log_error(e, {'context': 'cleanup_old_execution_history'})
         if connection:
             connection.rollback()
         return 0
