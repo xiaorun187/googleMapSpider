@@ -25,10 +25,10 @@ def wait_for_element(driver, selector, timeout=TimeoutConfig.ELEMENT_WAIT, condi
         )
         return element
     except TimeoutException:
-        _logger.log_warning(f"等待元素超时: {selector}")
+        _logger.warn(f"等待元素超时: {selector}")
         return None
     except Exception as e:
-        _logger.log_error(e, {'context': 'wait_for_element', 'selector': selector})
+        _logger.error(str(e), error=e, biz_context={'context': 'wait_for_element', 'selector': selector})
         return None
 
 def wait_for_page_load(driver, timeout=TimeoutConfig.PAGE_LOAD):
@@ -41,10 +41,10 @@ def wait_for_page_load(driver, timeout=TimeoutConfig.PAGE_LOAD):
         )
         return True
     except TimeoutException:
-        _logger.log_warning("页面加载超时")
+        _logger.warn("页面加载超时")
         return False
     except Exception as e:
-        _logger.log_error(e, {'context': 'wait_for_page_load'})
+        _logger.error(str(e), error=e, biz_context={'context': 'wait_for_page_load'})
         return False
 
 def wait_for_network_idle(driver, timeout=TimeoutConfig.NETWORK_IDLE):
@@ -95,7 +95,7 @@ def wait_for_network_idle(driver, timeout=TimeoutConfig.NETWORK_IDLE):
             pass
             
     except Exception as e:
-        _logger.log_warning(f"网络空闲等待发生非预期错误: {e}")
+        _logger.warn(f"网络空闲等待发生非预期错误: {e}")
     
     # 回退方案
     return wait_for_page_load(driver, timeout)

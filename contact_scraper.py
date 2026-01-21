@@ -39,7 +39,7 @@ try:
 except ImportError:
     httpx = None
     BeautifulSoup = None
-    _logger.log_warning("未安装 httpx 或 beautifulsoup4，混合模式不可用，将仅使用 Selenium。")
+    _logger.warn("未安装 httpx 或 beautifulsoup4，混合模式不可用，将仅使用 Selenium。")
 
 
 # 移除本地冗余函数 wait_for_element, wait_for_page_load, wait_for_network_idle，改用 utils.selenium_helpers
@@ -199,7 +199,7 @@ def extract_emails_static(url, email_pattern, is_valid_email_func, is_junk_email
                 if _email_validator.validate_mx_record(email):
                     found_emails.add(email.lower())
                 else:
-                    _logger.log_info(f"忽略无效 MX 记录的邮箱: {email}")
+                    _logger.info(f"忽略无效 MX 记录的邮箱: {email}")
 
         # 提取电话 (简单正则)
         phone_pattern_static = re.compile(r"(\+?\d{1,4}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4,6}|\d{8,14}")
@@ -218,7 +218,7 @@ def extract_emails_static(url, email_pattern, is_valid_email_func, is_junk_email
         return found_emails, found_phones, facebook_url
         
     except Exception as e:
-        _logger.log_error(e, {'context': 'extract_emails_static', 'url': url})
+        _logger.error(str(e), error=e, biz_context={'context': 'extract_emails_static', 'url': url})
         return set(), set(), None
 
 def extract_contact_info(driver, business_data_list):
@@ -239,12 +239,12 @@ def extract_contact_info(driver, business_data_list):
     for i, business in enumerate(business_data_list):
         # 检查是否应该停止
         if should_stop_extraction():
-            _logger.log_info("收到停止信号，停止联系方式提取")
+            _logger.info("收到停止信号，停止联系方式提取")
             break
         
         # 确保business是字典类型，如果是元组则转换为字典
         if isinstance(business, tuple):
-            _logger.log_warning(f"business是元组类型，尝试转换为字典")
+            _logger.warn(f"business是元组类型，尝试转换为字典")
             # 假设元组格式为 (id, name, website, city, product)
             if len(business) >= 3:
                 business = {
@@ -255,30 +255,30 @@ def extract_contact_info(driver, business_data_list):
                     'product': business[4] if len(business) > 4 else None
                 }
             else:
-                _logger.log_error(f"元组格式不正确，跳过此记录: {business}")
+                _logger.error(f"元组格式不正确，跳过此记录: {business}")
                 continue
         
         # 再次检查business是否为字典
         if not isinstance(business, dict):
-            _logger.log_error(f"business不是字典类型，跳过此记录: {type(business)} - {business}")
+            _logger.error(f"business不是字典类型，跳过此记录: {type(business)} - {business}")
             continue
             
         name = business.get('name', 'Unknown')
         website = business.get('website')
         if not website:
-            _logger.log_info(f"{name} 无网站，跳过联系方式提取")
+            _logger.info(f"{name} 无网站，跳过联系方式提取")
             yield i, name, business, f"{name} 无网站，跳过"
             continue
 
         try:
             # 验证 URL 格式
             if not _url_validator.validate(website):
-                _logger.log_warning(f"{name} 的网站 URL 无效: {website}")
+                _logger.warn(f"{name} 的网站 URL 无效: {website}")
                 yield i, name, business, f"[WARN] URL 无效: {website}"
                 continue
             
             # --- 混合模式优化: 先尝试静态提取 ---
-            _logger.log_info(f"尝试静态提取: {website}")
+            _logger.info(f"尝试静态提取: {website}")
             yield i, name, business, f"[STATIC] 正在扫描: {website}"
             static_emails, static_phones, static_fb = extract_emails_static(
                 website, email_pattern, is_valid_email, is_junk_email
@@ -289,29 +289,29 @@ def extract_contact_info(driver, business_data_list):
                 business['phones'] = list(static_phones) if static_phones else business.get('phones', [])
                 if static_fb: business['facebook'] = static_fb
                 
-                _logger.log_info(f"静态提取成功! {name} - 邮箱: {static_emails}")
+                _logger.info(f"静态提取成功! {name} - 邮箱: {static_emails}")
                 
                 # 立即保存并跳过 Selenium
                 try:
                     save_single_business_to_db(business)
                 except Exception as e:
-                    _logger.log_error(e, {'context': 'db_save_static'})
+                    _logger.error(str(e), error=e, biz_context={'context': 'db_save_static'})
                     
                 _logger.log_extraction(website, 1, 0)
                 yield i, name, business, f"[SUCCESS] 静态提取命中: {name} (邮箱:{len(static_emails)}个)"
                 continue
             # -----------------------------------
             
-            _logger.log_info(f"静态提取未找到邮箱，启动浏览器访问: {website}")
+            _logger.info(f"静态提取未找到邮箱，启动浏览器访问: {website}")
             
-            _logger.log_info(f"访问网站: {website} 以提取联系方式")
+            _logger.info(f"访问网站: {website} 以提取联系方式")
             _logger.log_request(website, 0, 0)
             yield i, name, business, f"[BROWSER] 启动浏览器访问: {website}"
             driver.get(website)
             
             # 使用智能等待策略
             if not _smart_wait.wait_for_page_load(driver, timeout=8):
-                _logger.log_warning(f"等待 {website} 页面加载超时，尝试继续")
+                _logger.warn(f"等待 {website} 页面加载超时，尝试继续")
             
             # 等待网络请求完成
             _smart_wait.wait_for_network_idle(driver, timeout=12)
@@ -397,7 +397,7 @@ def extract_contact_info(driver, business_data_list):
             max_subpages = 3
             for subpage_url in candidate_urls[:max_subpages]:
                 try:
-                    _logger.log_info(f"访问子页面: {subpage_url}")
+                    _logger.info(f"访问子页面: {subpage_url}")
                     driver.get(subpage_url)
                     _smart_wait.wait_for_page_load(driver, timeout=5)
                     _smart_wait.wait_for_network_idle(driver, timeout=5)
@@ -425,7 +425,7 @@ def extract_contact_info(driver, business_data_list):
                             phones.add(clean_phone)
                             
                 except Exception as e:
-                    _logger.log_error(e, {'context': 'subpage_extract', 'url': subpage_url})
+                    _logger.error(str(e), error=e, biz_context={'context': 'subpage_extract', 'url': subpage_url})
 
             # 提取电话号码（由于正则表达式可能返回元组，需要特殊处理）
             raw_phones = phone_pattern.findall(page_text) + phone_pattern.findall(page_source)
@@ -440,11 +440,11 @@ def extract_contact_info(driver, business_data_list):
             business['phones'] = list(phones) if phones else business.get('phones', [])
             
             if business['emails']:
-                _logger.log_info(f"提取到 {name} 的邮箱: {business['emails']}")
+                _logger.info(f"提取到 {name} 的邮箱: {business['emails']}")
             if business['phones']:
-                _logger.log_info(f"提取到 {name} 的电话: {business['phones']}")
+                _logger.info(f"提取到 {name} 的电话: {business['phones']}")
             else:
-                _logger.log_info(f"未在 {name} 的网站找到邮箱")
+                _logger.info(f"未在 {name} 的网站找到邮箱")
 
             # 提取社交媒体和其他联系方式
             social_platforms = {
@@ -463,7 +463,7 @@ def extract_contact_info(driver, business_data_list):
                     urls = re.findall(pattern, page_text)
                     business[key] = urls[0] if urls else None
                 if business[key]:
-                    _logger.log_info(f"提取到 {name} 的 {label}: {business[key]}")
+                    _logger.info(f"提取到 {name} 的 {label}: {business[key]}")
                     
             if not business.get('emails') and business.get('facebook'):
                 yield progress, name, business, f"未找到邮箱，开始从facebook提取 {name} "
@@ -475,15 +475,15 @@ def extract_contact_info(driver, business_data_list):
                     result = save_single_business_to_db(business)
                     if result['success']:
                         if result['action'] == 'inserted':
-                            _logger.log_info(f"[DB] 新增记录 [{name}] ID={result['record_id']}")
+                            _logger.info(f"[DB] 新增记录 [{name}] ID={result['record_id']}")
                         elif result['action'] == 'updated':
-                            _logger.log_info(f"[DB] 更新记录 [{name}] ID={result['record_id']}")
+                            _logger.info(f"[DB] 更新记录 [{name}] ID={result['record_id']}")
                     else:
-                        _logger.log_error(f"[DB ERROR] 保存失败 [{name}]: {result['error']}")
+                        _logger.error(f"[DB ERROR] 保存失败 [{name}]: {result['error']}")
                 except Exception as e:
-                    _logger.log_error(e, {'context': 'db_save_fb'})
+                    _logger.error(str(e), error=e, biz_context={'context': 'db_save_fb'})
             
-            _logger.log_info(f"成功提取 {name} 的联系方式: {business}")
+            _logger.info(f"成功提取 {name} 的联系方式: {business}")
             _logger.log_extraction(website, 1, 0)
             
             # 立即保存到数据库
@@ -491,18 +491,18 @@ def extract_contact_info(driver, business_data_list):
                 result = save_single_business_to_db(business)
                 if result['success']:
                     if result['action'] == 'inserted':
-                        _logger.log_info(f"[DB] 新增记录 [{name}] ID={result['record_id']}")
+                        _logger.info(f"[DB] 新增记录 [{name}] ID={result['record_id']}")
                     elif result['action'] == 'updated':
-                        _logger.log_info(f"[DB] 更新记录 [{name}] ID={result['record_id']}")
+                        _logger.info(f"[DB] 更新记录 [{name}] ID={result['record_id']}")
                 else:
-                    _logger.log_error(f"[DB ERROR] 保存失败 [{name}]: {result['error']}")
+                    _logger.error(f"[DB ERROR] 保存失败 [{name}]: {result['error']}")
             except Exception as e:
-                _logger.log_error(e, {'context': 'db_save_final'})
+                _logger.error(str(e), error=e, biz_context={'context': 'db_save_final'})
                 
             yield progress, name, business, f"成功提取 {name} 的联系方式"
             
         except Exception as e:
-            _logger.log_error(e, {'context': 'extract_contact_info', 'name': name})
+            _logger.error(str(e), error=e, biz_context={'context': 'extract_contact_info', 'name': name})
             _logger.log_extraction(website, 0, 1)
             yield i, name, business, f"提取 {name} 联系方式失败: {str(e)}"
 
@@ -532,7 +532,7 @@ def extract_contacts_by_ids(driver, record_ids: list):
     release_connection(conn)
     
     if not records:
-        _logger.log_error("未找到对应的记录")
+        _logger.error("未找到对应的记录")
         return
 
     # 调用核心提取逻辑

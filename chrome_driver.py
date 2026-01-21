@@ -70,7 +70,7 @@ class BrowserManager:
             self._is_healthy = True
             return True
         except Exception as e:
-            _logger.log_warning(f"浏览器健康检查失败: {e}")
+            _logger.warn(f"浏览器健康检查失败: {e}")
             self._is_healthy = False
             return False
     
@@ -92,7 +92,7 @@ class BrowserManager:
         if self.restart_count >= self.max_restart_attempts:
             return None, f"已达到最大重启次数 ({self.max_restart_attempts})"
         
-        _logger.log_info(f"正在重启浏览器 (尝试 {self.restart_count + 1}/{self.max_restart_attempts})...")
+        _logger.info(f"正在重启浏览器 (尝试 {self.restart_count + 1}/{self.max_restart_attempts})...")
         
         # 保存当前状态
         self.save_state()
@@ -112,13 +112,13 @@ class BrowserManager:
             if self.last_url and 'google.com/maps' in self.last_url:
                 try:
                     self.driver.get(self.last_url)
-                    _logger.log_info(f"已恢复到: {self.last_url}")
+                    _logger.info(f"已恢复到: {self.last_url}")
                 except Exception as e:
-                    _logger.log_warning(f"恢复URL失败: {e}")
+                    _logger.warn(f"恢复URL失败: {e}")
             
             return self.driver, proxy_info
         except Exception as e:
-            _logger.log_error(e, {'context': 'browser_restart'})
+            _logger.error(str(e), error=e, biz_context={'context': 'browser_restart'})
             self.restart_count += 1
             return None, str(e)
     
@@ -128,7 +128,7 @@ class BrowserManager:
             try:
                 self.driver.quit()
             except Exception as e:
-                _logger.log_error(e, {'context': 'browser_quit'})
+                _logger.error(str(e), error=e, biz_context={'context': 'browser_quit'})
             finally:
                 self.driver = None
                 self._is_healthy = False
@@ -147,7 +147,7 @@ class BrowserManager:
         try:
             return func(*args, **kwargs)
         except (WebDriverException, InvalidSessionIdException) as e:
-            _logger.log_warning(f"浏览器异常，尝试恢复: {e}")
+            _logger.warn(f"浏览器异常，尝试恢复: {e}")
             
             # 尝试重启
             new_driver, result = self.restart()
@@ -241,10 +241,10 @@ def get_chrome_driver(proxy=None, headless=None):
         is_headless = True
     
     if is_headless:
-        _logger.log_info("启用无头模式 (headless=new)")
+        _logger.info("启用无头模式 (headless=new)")
         chrome_options.add_argument("--headless=new")
     else:
-        _logger.log_info("启用 GUI 模式 (可见窗口)")
+        _logger.info("启用 GUI 模式 (可见窗口)")
     
     # 基础配置
     chrome_options.add_argument("--no-sandbox")
@@ -314,31 +314,31 @@ def get_chrome_driver(proxy=None, headless=None):
                 ]
                 chrome_options.add_extension(extension)
                 proxy_info = f"应用带认证代理: {proxy}"
-                _logger.log_info(proxy_info)
+                _logger.info(proxy_info)
             except ValueError as e:
                 proxy_info = f"代理格式错误: {proxy}, 应为 username:password@host:port, 错误: {e}"
-                _logger.log_error(ValueError(proxy_info))
+                _logger.error(ValueError(proxy_info))
         else:
             chrome_options.add_argument(f"--proxy-server={proxy}")
             proxy_info = f"应用无认证代理: {proxy}"
-            _logger.log_info(proxy_info)
+            _logger.info(proxy_info)
 
     # 优先使用配置的 ChromeDriver (Docker 环境或手动指定)
     if CHROMEDRIVER_PATH and os.path.exists(CHROMEDRIVER_PATH):
         try:
-            _logger.log_info(f"使用本地 ChromeDriver: {CHROMEDRIVER_PATH}")
+            _logger.info(f"使用本地 ChromeDriver: {CHROMEDRIVER_PATH}")
             service_obj = Service(CHROMEDRIVER_PATH)
             driver = webdriver.Chrome(service=service_obj, options=chrome_options)
             return driver, proxy_info
         except Exception as e:
-            _logger.log_warning(f"本地 ChromeDriver 启动失败，尝试使用 webdriver-manager: {e}")
+            _logger.warn(f"本地 ChromeDriver 启动失败，尝试使用 webdriver-manager: {e}")
 
     # 回退到 webdriver-manager 自动管理
     try:
-        _logger.log_info("使用 webdriver-manager 自动下载驱动...")
+        _logger.info("使用 webdriver-manager 自动下载驱动...")
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         return driver, proxy_info
     except Exception as e:
-        _logger.log_error(e, {'context': 'chromedriver_init'})
+        _logger.error(str(e), error=e, biz_context={'context': 'chromedriver_init'})
         raise

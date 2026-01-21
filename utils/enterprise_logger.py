@@ -469,7 +469,7 @@ class EnterpriseLogger:
         
         kwargs['error_code'] = error_code
         return self._log(LogLevel.FATAL, message, **kwargs)
-    
+
     # ========================================================================
     # 业务场景快捷方法
     # ========================================================================

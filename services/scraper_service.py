@@ -153,14 +153,14 @@ class ScraperService:
                 })
 
             except Exception as e:
-                _logger.log_error(e, {'context': 'service_execution', 'task_id': task_id})
+                _logger.error(str(e), error=e, biz_context={'context': 'service_execution', 'task_id': task_id})
                 self.emit_progress({'progress': 100, 'message': f'发生错误: {e}', 'error': True})
             finally:
                 if driver:
                     try:
                         driver.quit()
                     except Exception as quit_error:
-                        _logger.log_error(quit_error, {'context': 'driver_quit_failed'})
+                        _logger.error(str(quit_error), error=quit_error, biz_context={'context': 'driver_quit_failed'})
                         # 尝试强制杀掉残留的 chromedriver 进程
                         try:
                             import subprocess

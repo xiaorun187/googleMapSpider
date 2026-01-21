@@ -80,7 +80,7 @@
 
         .main-content {
             display: grid;
-            grid-template-columns: 340px 1fr;
+            grid-template-columns: 280px 1fr;
             gap: 6px;
             flex: 1;
             min-height: 0;
@@ -135,16 +135,32 @@
         }
 
         .panel-body {
-            padding: 16px;
+            padding: 12px 16px;
             flex: 1;
             display: flex;
             flex-direction: column;
             min-height: 0;
+        }
+
+        .recipients-panel .panel-body {
             overflow-y: auto;
         }
 
+        .email-panel .panel-body {
+            overflow: visible;
+        }
+
         .form-group {
-            margin-bottom: 12px;
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+
+        .form-group.editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 400px;
+            margin-bottom: 8px;
         }
 
         .form-group label {
@@ -256,7 +272,8 @@
     <div class="container">
         <header class="header">
             <h1><span class="logo-icon">✉️</span>发送邮件</h1>
-            <nav class="nav-links"><a href="/operation">数据提取</a><a href="/history">数据管理</a><a href="/email">邮件营销</a></nav>
+            <nav class="nav-links"><a href="/operation">数据提取</a><a href="/history">数据管理</a><a href="/email">邮件营销</a>
+            </nav>
         </header>
         <div class="main-content">
             <aside class="recipients-panel">
@@ -309,9 +326,9 @@
                         <div class="ai-status" id="ai-status"></div>
                     </div>
 
-                    <div class="form-group" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+                    <div class="form-group editor-container">
                         <label>邮件正文</label>
-                        <textarea id="email-body" style="flex:1;min-height:200px;"></textarea>
+                        <textarea id="email-body"></textarea>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="attach-file" checked>
@@ -534,18 +551,17 @@
 
     /* AI 辅助样式 */
     .ai-assist-section {
-        margin-bottom: 10px;
-        padding: 10px;
+        margin-bottom: 8px;
+        padding: 8px 10px;
         background: linear-gradient(135deg, #fef3c7, #fde68a);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid #f59e0b;
         flex-shrink: 0;
     }
 
     .ai-buttons {
         display: flex;
-        gap: 8px;
-        margin-bottom: 8px;
+        gap: 6px;
     }
 
     .ai-requirements {
@@ -745,7 +761,7 @@
 
     tinymce.init({
         selector: '#email-body',
-        height: 240,
+        height: 'calc(100vh - 320px)',
         menubar: true,
         plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table emoticons wordcount',
         toolbar: 'undo redo | styleselect | bold italic | alignleft aligncenter alignright | bullist numlist outdent indent | forecolor backcolor | link image | code',
@@ -830,7 +846,7 @@
                 file: csvFile,
                 recipient_count: emails.length
             };
-            
+
             const res = await fetch('/api/ai/generate-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -875,7 +891,7 @@
                 file: csvFile,
                 recipient_count: emails.length
             };
-            
+
             const res = await fetch('/api/ai/generate-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

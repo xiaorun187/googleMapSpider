@@ -19,7 +19,7 @@ def scraper_facebook_email(proxy):
         if facebook_url and business_id:
             extract_business_info(proxy, facebook_url=facebook_url, business_id=business_id)
         else:
-            _logger.log_info(f"记录 ID {r.get('id')} 没有 Facebook URL，跳过。")
+            _logger.info(f"记录 ID {r.get('id')} 没有 Facebook URL，跳过。")
 def extract_single_facebook_email_info(driver, facebook_url):
     try:
         driver.get(facebook_url)
@@ -29,7 +29,7 @@ def extract_single_facebook_email_info(driver, facebook_url):
         emails = re.findall(email_pattern, page_source)
         return emails
     except Exception as e:
-        _logger.log_error(e, {'context': 'extract_fb_email', 'url': facebook_url})
+        _logger.error(str(e), error=e, biz_context={'context': 'extract_fb_email', 'url': facebook_url})
         return []  # 确保始终返回列表类型
 def extract_business_info(proxy, facebook_url, business_id):
     driver, proxy_info = get_chrome_driver(proxy)
@@ -47,18 +47,18 @@ def extract_business_info(proxy, facebook_url, business_id):
             # 如果找到多个邮箱，可以根据一些策略选择最可能的那个
             # 这里我们简单地选择第一个找到的邮箱
             email_address = emails[0]
-            _logger.log_info(f"从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址: {email_address}")
+            _logger.info(f"从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址: {email_address}")
 
             update_success = update_business_email(business_id, email_address)
             if update_success:
-                _logger.log_info(f"成功更新数据库中 ID 为 {business_id} 的邮箱为: {email_address}")
+                _logger.info(f"成功更新数据库中 ID 为 {business_id} 的邮箱为: {email_address}")
             else:
-                _logger.log_warning(f"更新数据库中 ID 为 {business_id} 的邮箱失败。")
+                _logger.warn(f"更新数据库中 ID 为 {business_id} 的邮箱失败。")
         else:
-            _logger.log_info(f"未能从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址。")
+            _logger.info(f"未能从 Facebook URL: {facebook_url} 的源代码中找到邮箱地址。")
 
     except Exception as e:
-        _logger.log_error(e, {'context': 'fb_fetch_task', 'url': facebook_url, 'id': business_id})
+        _logger.error(str(e), error=e, biz_context={'context': 'fb_fetch_task', 'url': facebook_url, 'id': business_id})
     finally:
         driver.quit()
 

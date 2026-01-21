@@ -74,7 +74,7 @@ def check_scraper_service_error_handling():
         content = f.read()
     
     checks = [
-        ('_logger.log_error', '错误日志记录'),
+        ('_logger.error', '错误日志记录'),
         ('pkill', '进程清理命令'),
         ('driver_quit_failed', '驱动退出失败上下文'),
         ('from utils.enterprise_logger import get_logger', 'logger 导入'),
