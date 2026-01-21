@@ -21,12 +21,19 @@ from utils import save_to_csv, save_to_excel
 from email_sender import EmailSender
 from db import save_business_data_to_db, save_single_business_to_db, get_history_records, update_send_count, update_send_failed, backup_database_daily
 from services.user_service import UserService
+from utils.auth import login_required
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+
+# Session 安全配置
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # 防止 JavaScript 访问 Cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # 防止 CSRF 攻击
+# 生产环境应启用: app.config['SESSION_COOKIE_SECURE'] = True  # 仅通过 HTTPS 传输
+
 # 使用 threading 模式，避免 gevent-websocket 配置问题
 socketio = SocketIO(app, cors_allowed_origins=CORS_ALLOWED_ORIGINS, async_mode='threading')
 

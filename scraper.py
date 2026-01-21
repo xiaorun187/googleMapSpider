@@ -63,10 +63,12 @@ class ProgressManager:
     - 关键错误时自动保存进度
     - 从保存点恢复功能
     - 支持多任务进度管理
+    - 线程安全（使用锁保护文件操作）
     """
     
     def __init__(self, progress_dir: str = PROGRESS_DIR):
         self.progress_dir = progress_dir
+        self._lock = __import__('threading').Lock()  # 文件操作锁
         self._ensure_dir_exists()
     
     def _ensure_dir_exists(self):
@@ -82,7 +84,7 @@ class ProgressManager:
     
     def save_progress(self, task_key: str, progress_data: dict) -> bool:
         """
-        保存进度
+        保存进度（线程安全）
         
         Args:
             task_key: 任务标识（如 "product_in_city"）
@@ -91,24 +93,29 @@ class ProgressManager:
         Returns:
             bool: 是否保存成功
         """
-        try:
-            progress_file = self._get_progress_file(task_key)
-            data = {
-                'task_key': task_key,
-                'saved_at': datetime.now().isoformat(),
-                **progress_data
-            }
-            with open(progress_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"进度已保存: {progress_file}")
-            return True
-        except Exception as e:
-            print(f"保存进度失败: {e}", file=sys.stderr)
-            return False
+        with self._lock:
+            try:
+                progress_file = self._get_progress_file(task_key)
+                data = {
+                    'task_key': task_key,
+                    'saved_at': datetime.now().isoformat(),
+                    **progress_data
+                }
+                # 使用临时文件 + 原子替换，防止写入中断导致文件损坏
+                temp_file = progress_file + '.tmp'
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                # 原子替换
+                os.replace(temp_file, progress_file)
+                _logger.log_info(f"进度已保存: {progress_file}")
+                return True
+            except Exception as e:
+                _logger.log_error(e, {'context': 'save_progress', 'task_key': task_key})
+                return False
     
     def load_progress(self, task_key: str) -> dict | None:
         """
-        加载进度
+        加载进度（线程安全）
         
         Args:
             task_key: 任务标识
@@ -116,20 +123,21 @@ class ProgressManager:
         Returns:
             dict | None: 进度数据，如果不存在则返回 None
         """
-        try:
-            progress_file = self._get_progress_file(task_key)
-            if os.path.exists(progress_file):
-                with open(progress_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                print(f"已加载进度: {progress_file}")
-                return data
-        except Exception as e:
-            print(f"加载进度失败: {e}", file=sys.stderr)
-        return None
+        with self._lock:
+            try:
+                progress_file = self._get_progress_file(task_key)
+                if os.path.exists(progress_file):
+                    with open(progress_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    _logger.log_info(f"已加载进度: {progress_file}")
+                    return data
+            except Exception as e:
+                _logger.log_error(e, {'context': 'load_progress', 'task_key': task_key})
+            return None
     
     def clear_progress(self, task_key: str) -> bool:
         """
-        清除进度
+        清除进度（线程安全）
         
         Args:
             task_key: 任务标识
@@ -137,20 +145,22 @@ class ProgressManager:
         Returns:
             bool: 是否清除成功
         """
-        try:
-            progress_file = self._get_progress_file(task_key)
-            if os.path.exists(progress_file):
-                os.remove(progress_file)
-                print(f"进度已清除: {progress_file}")
-            return True
-        except Exception as e:
-            print(f"清除进度失败: {e}", file=sys.stderr)
-            return False
+        with self._lock:
+            try:
+                progress_file = self._get_progress_file(task_key)
+                if os.path.exists(progress_file):
+                    os.remove(progress_file)
+                    _logger.log_info(f"进度已清除: {progress_file}")
+                return True
+            except Exception as e:
+                _logger.log_error(e, {'context': 'clear_progress', 'task_key': task_key})
+                return False
     
     def has_progress(self, task_key: str) -> bool:
         """检查是否有保存的进度"""
-        progress_file = self._get_progress_file(task_key)
-        return os.path.exists(progress_file)
+        with self._lock:
+            progress_file = self._get_progress_file(task_key)
+            return os.path.exists(progress_file)
 
 
 # 全局进度管理器
@@ -190,21 +200,40 @@ def wait_for_page_load(driver, timeout=10):
         return False
 
 def wait_for_network_idle(driver, timeout=15):
-    """等待网络请求完成（需要Chrome DevTools Protocol支持）"""
+    """
+    等待网络请求完成（需要Chrome DevTools Protocol支持）
+    
+    改进：
+    - 添加具体的 WebDriverException 捕获
+    - 处理 CDP 命令不支持的情况
+    - 使用结构化日志记录
+    """
+    from selenium.common.exceptions import WebDriverException
+    
     try:
-        # 检查浏览器是否支持Network API
-        if hasattr(driver, 'execute_cdp_cmd'):
-            # 启用网络监控
+        # 检查浏览器是否支持 Network API
+        if not hasattr(driver, 'execute_cdp_cmd'):
+            _logger.log_warning("浏览器不支持 CDP 命令，回退到页面加载等待")
+            return wait_for_page_load(driver, timeout)
+        
+        # 启用网络监控
+        try:
             driver.execute_cdp_cmd('Network.enable', {})
-            
-            # 等待网络空闲（500ms内无请求）
-            start_time = time.time()
-            while time.time() - start_time < timeout:
+        except WebDriverException as e:
+            _logger.log_warning(f"CDP Network.enable 失败: {e}, 回退到页面加载等待")
+            return wait_for_page_load(driver, timeout)
+        
+        # 等待网络空闲（500ms内无请求）
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                # 注意：Network.getAllRequests 可能在某些 Chromium 版本不可用
+                # 使用更保守的方式检查
                 requests = driver.execute_cdp_cmd('Network.getAllRequests', {})
                 # 检查是否有进行中的请求
                 has_in_flight = any(req.get('status') == 'pending' for req in requests)
                 if not has_in_flight:
-                    # 等待500ms确认网络空闲
+                    # 等待 500ms 确认网络空闲
                     time.sleep(0.5)
                     # 再次检查
                     requests = driver.execute_cdp_cmd('Network.getAllRequests', {})
@@ -213,10 +242,20 @@ def wait_for_network_idle(driver, timeout=15):
                         driver.execute_cdp_cmd('Network.disable', {})
                         return True
                 time.sleep(1)
+            except WebDriverException:
+                # CDP 命令失败，跳出循环使用回退方案
+                break
+        
+        # 清理：尝试禁用网络监控
+        try:
             driver.execute_cdp_cmd('Network.disable', {})
+        except WebDriverException:
+            pass  # 忽略清理错误
+            
     except Exception as e:
-        print(f"网络空闲等待失败: {e}", file=sys.stderr)
-    # 如果CDP不可用或失败，回退到页面加载完成等待
+        _logger.log_warning(f"网络空闲等待失败: {e}, 回退到页面加载等待")
+    
+    # 如果 CDP 不可用或失败，回退到页面加载完成等待
     return wait_for_page_load(driver, timeout)
 
 def scroll_and_load_more(driver, max_scrolls=50, scroll_delay=1, target_count=500):

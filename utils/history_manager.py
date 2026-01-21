@@ -4,13 +4,15 @@ HistoryManager - 历史数据管理模块
 """
 import os
 import sys
-import sqlite3
 from typing import List, Tuple, Optional, Dict, Any
 
 sys.path.insert(0, '.')
 from validators.email_validator import EmailValidator
 from validators.phone_validator import PhoneValidator
 from validators.url_validator import URLValidator
+
+# 使用 db.py 的连接池，避免重复创建连接
+from db import get_connection, get_db_connection, release_connection
 
 
 class HistoryManager:
@@ -23,25 +25,20 @@ class HistoryManager:
     - 记录更新
     - 记录删除
     - 数据验证
+    
+    注意：本类使用 db.py 中的连接池管理数据库连接，
+    确保高效复用连接并防止连接泄露。
     """
     
-    DB_FILE = os.path.join(os.environ.get('DATA_DIR', 'data'), "business.db")
-    
-    def __init__(self, db_file: str = None):
+    def __init__(self):
         """
         初始化历史管理器
         
-        Args:
-            db_file: 数据库文件路径
+        使用 db.py 的全局连接池，无需手动管理数据库文件路径。
         """
-        self.db_file = db_file or self.DB_FILE
         self._email_validator = EmailValidator()
         self._phone_validator = PhoneValidator()
         self._url_validator = URLValidator()
-    
-    def _get_connection(self) -> sqlite3.Connection:
-        """获取数据库连接"""
-        return sqlite3.connect(self.db_file)
     
     def get_records(
         self, 
@@ -65,7 +62,10 @@ class HistoryManager:
         connection = None
         cursor = None
         try:
-            connection = self._get_connection()
+            connection = get_db_connection()
+            if not connection:
+                print("无法获取数据库连接", file=sys.stderr)
+                return [], 0
             cursor = connection.cursor()
             
             offset = (page - 1) * size
@@ -124,8 +124,7 @@ class HistoryManager:
         finally:
             if cursor:
                 cursor.close()
-            if connection:
-                connection.close()
+            release_connection(connection)
     
     def create_record(self, data: dict) -> int:
         """
@@ -146,7 +145,10 @@ class HistoryManager:
         connection = None
         cursor = None
         try:
-            connection = self._get_connection()
+            connection = get_db_connection()
+            if not connection:
+                print("无法获取数据库连接", file=sys.stderr)
+                return -1
             cursor = connection.cursor()
             
             # 处理phones字段
@@ -184,8 +186,7 @@ class HistoryManager:
         finally:
             if cursor:
                 cursor.close()
-            if connection:
-                connection.close()
+            release_connection(connection)
     
     def update_record(self, record_id: int, data: dict) -> bool:
         """
@@ -207,7 +208,10 @@ class HistoryManager:
         connection = None
         cursor = None
         try:
-            connection = self._get_connection()
+            connection = get_db_connection()
+            if not connection:
+                print("无法获取数据库连接", file=sys.stderr)
+                return False
             cursor = connection.cursor()
             
             # 处理phones字段
@@ -263,7 +267,10 @@ class HistoryManager:
         connection = None
         cursor = None
         try:
-            connection = self._get_connection()
+            connection = get_db_connection()
+            if not connection:
+                print("无法获取数据库连接", file=sys.stderr)
+                return False
             cursor = connection.cursor()
             
             cursor.execute("DELETE FROM business_records WHERE id = ?", (record_id,))
@@ -277,8 +284,7 @@ class HistoryManager:
         finally:
             if cursor:
                 cursor.close()
-            if connection:
-                connection.close()
+            release_connection(connection)
     
     def get_record_by_id(self, record_id: int) -> Optional[dict]:
         """
@@ -293,7 +299,10 @@ class HistoryManager:
         connection = None
         cursor = None
         try:
-            connection = self._get_connection()
+            connection = get_db_connection()
+            if not connection:
+                print("无法获取数据库连接", file=sys.stderr)
+                return None
             cursor = connection.cursor()
             
             cursor.execute("""
@@ -316,8 +325,7 @@ class HistoryManager:
         finally:
             if cursor:
                 cursor.close()
-            if connection:
-                connection.close()
+            release_connection(connection)
     
     def validate_record(
         self, 
@@ -380,7 +388,10 @@ class HistoryManager:
         connection = None
         cursor = None
         try:
-            connection = self._get_connection()
+            connection = get_db_connection()
+            if not connection:
+                print("无法获取数据库连接", file=sys.stderr)
+                return 0
             cursor = connection.cursor()
             
             placeholders = ','.join(['?' for _ in record_ids])
@@ -398,5 +409,4 @@ class HistoryManager:
         finally:
             if cursor:
                 cursor.close()
-            if connection:
-                connection.close()
+            release_connection(connection)

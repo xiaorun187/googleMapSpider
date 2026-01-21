@@ -934,41 +934,80 @@
         let isExtracting = false;
         let countryCityData = {};
 
+        // ========== XSS 防护工具函数 ==========
+        /**
+         * HTML 实体转义，防止 XSS 注入
+         */
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        /**
+         * URL 安全转义，仅允许 http/https/mailto 协议
+         */
+        function escapeUrl(url) {
+            if (!url) return '';
+            const trimmed = String(url).trim();
+            // 只允许安全协议
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('mailto:')) {
+                return encodeURI(trimmed);
+            }
+            // 默认添加 https 前缀（如果看起来像域名）
+            if (trimmed.includes('.') && !trimmed.includes(' ')) {
+                return 'https://' + encodeURI(trimmed);
+            }
+            return '';
+        }
+        // ========================================
+
         // 格式化数据展示
         function formatValue(v) {
             if (!v || (Array.isArray(v) && !v.length)) return '<span class="none">-</span>';
-            return Array.isArray(v) ? v.join(', ') : v;
+            const text = Array.isArray(v) ? v.join(', ') : v;
+            return escapeHtml(text);
         }
 
-        // 渲染单张卡片
+        // 渲染单张卡片 (XSS 安全版本)
         function renderCard(b, i) {
             const tags = [];
-            if (b.facebook) tags.push(`<a href="${b.facebook}" target="_blank" class="s-link" title="Facebook">f</a>`);
-            if (b.twitter) tags.push(`<a href="${b.twitter}" target="_blank" class="s-link" title="Twitter">t</a>`);
-            if (b.instagram) tags.push(`<a href="${b.instagram}" target="_blank" class="s-link" title="Instagram">i</a>`);
-            if (b.linkedin) tags.push(`<a href="${b.linkedin}" target="_blank" class="s-link" title="LinkedIn">in</a>`);
+            // 社交链接需要转义 URL
+            if (b.facebook) tags.push(`<a href="${escapeUrl(b.facebook)}" target="_blank" rel="noopener noreferrer" class="s-link" title="Facebook">f</a>`);
+            if (b.twitter) tags.push(`<a href="${escapeUrl(b.twitter)}" target="_blank" rel="noopener noreferrer" class="s-link" title="Twitter">t</a>`);
+            if (b.instagram) tags.push(`<a href="${escapeUrl(b.instagram)}" target="_blank" rel="noopener noreferrer" class="s-link" title="Instagram">i</a>`);
+            if (b.linkedin) tags.push(`<a href="${escapeUrl(b.linkedin)}" target="_blank" rel="noopener noreferrer" class="s-link" title="LinkedIn">in</a>`);
 
             const emailStr = Array.isArray(b.emails) ? b.emails[0] : b.emails;
             const phoneStr = Array.isArray(b.phones) ? b.phones[0] : b.phones;
 
+            // 所有用户输入的文本都需要转义
+            const safeName = escapeHtml(b.name || 'Unknown');
+            const safeWebsite = escapeHtml(b.website);
+            const safeWebsiteUrl = escapeUrl(b.website);
+            const safeEmail = escapeHtml(emailStr);
+            const safeEmailUrl = emailStr ? `mailto:${escapeHtml(emailStr)}` : '';
+            const safePhone = escapeHtml(phoneStr);
+
             return `
                 <div class="b-card bounce-in">
                     <div class="b-header">
-                        <span class="b-title" title="${b.name || 'Unknown'}">${b.name || 'Unknown'}</span>
+                        <span class="b-title" title="${safeName}">${safeName}</span>
                         <span class="b-badge">#${i + 1}</span>
                     </div>
                     <div class="b-body">
                         <div class="b-row">
                             <span class="b-icon">🌐</span>
-                            <span class="b-val">${b.website ? `<a href="${b.website}" target="_blank">${b.website}</a>` : '<span class="none">无官网</span>'}</span>
+                            <span class="b-val">${safeWebsiteUrl ? `<a href="${safeWebsiteUrl}" target="_blank" rel="noopener noreferrer">${safeWebsite}</a>` : '<span class="none">无官网</span>'}</span>
                         </div>
                         <div class="b-row">
                             <span class="b-icon">📧</span>
-                            <span class="b-val">${emailStr ? `<a href="mailto:${emailStr}">${emailStr}</a>` : '<span class="none">无邮箱</span>'}</span>
+                            <span class="b-val">${safeEmail ? `<a href="${safeEmailUrl}">${safeEmail}</a>` : '<span class="none">无邮箱</span>'}</span>
                         </div>
                         <div class="b-row">
                             <span class="b-icon">📞</span>
-                            <span class="b-val">${phoneStr || '<span class="none">无电话</span>'}</span>
+                            <span class="b-val">${safePhone || '<span class="none">无电话</span>'}</span>
                         </div>
                     </div>
                     ${tags.length ? `<div class="b-footer">${tags.join('')}</div>` : ''}
@@ -976,7 +1015,7 @@
             `;
         }
 
-        // 渲染表格
+        // 渲染表格 (XSS 安全版本)
         function renderTable(data, startIdx) {
             return `
                 <table class="b-table">
@@ -993,13 +1032,19 @@
                         ${data.map((b, i) => {
                 const emailStr = Array.isArray(b.emails) ? b.emails[0] : b.emails;
                 const phoneStr = Array.isArray(b.phones) ? b.phones[0] : b.phones;
+                // XSS 防护：转义所有用户输入
+                const safeName = escapeHtml(b.name) || '-';
+                const safeWebsite = escapeHtml(b.website);
+                const safeWebsiteUrl = escapeUrl(b.website);
+                const safeEmail = escapeHtml(emailStr) || '-';
+                const safePhone = escapeHtml(phoneStr) || '-';
                 return `
                                 <tr>
                                     <td>${startIdx + i + 1}</td>
-                                    <td style="font-weight:600;">${b.name || '-'}</td>
-                                    <td>${b.website ? `<a href="${b.website}" target="_blank">${b.website}</a>` : '-'}</td>
-                                    <td>${emailStr || '-'}</td>
-                                    <td>${phoneStr || '-'}</td>
+                                    <td style="font-weight:600;">${safeName}</td>
+                                    <td>${safeWebsiteUrl ? `<a href="${safeWebsiteUrl}" target="_blank" rel="noopener noreferrer">${safeWebsite}</a>` : '-'}</td>
+                                    <td>${safeEmail}</td>
+                                    <td>${safePhone}</td>
                                 </tr>
                             `;
             }).join('')}

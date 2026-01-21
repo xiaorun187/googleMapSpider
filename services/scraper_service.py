@@ -7,6 +7,10 @@ from chrome_driver import get_chrome_driver
 from scraper import extract_business_info, should_stop_extraction
 from db import save_single_business_to_db
 from utils import save_to_excel
+from utils.enterprise_logger import get_logger
+
+# 初始化日志器
+_logger = get_logger('scraper-service')
 
 class ScraperService:
     """
@@ -149,10 +153,19 @@ class ScraperService:
                 })
 
             except Exception as e:
+                _logger.log_error(e, {'context': 'service_execution', 'task_id': task_id})
                 print(f"[ERROR] Service Execution Error: {e}", file=sys.stderr)
                 self.emit_progress({'progress': 100, 'message': f'发生错误: {e}', 'error': True})
             finally:
-                if driver: 
-                    try: driver.quit()
-                    except: pass
+                if driver:
+                    try:
+                        driver.quit()
+                    except Exception as quit_error:
+                        _logger.log_error(quit_error, {'context': 'driver_quit_failed'})
+                        # 尝试强制杀掉残留的 chromedriver 进程
+                        try:
+                            import subprocess
+                            subprocess.run(['pkill', '-f', 'chromedriver'], capture_output=True, timeout=5)
+                        except Exception:
+                            pass  # 最后的兜底，无法再做更多
                 task_manager.unregister_task(task_id)

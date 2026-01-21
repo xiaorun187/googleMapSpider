@@ -26,7 +26,6 @@ _url_validator = URLValidator()
 _smart_wait = SmartWaitStrategy()
 _batch_processor = BatchProcessor(batch_size=10)
 _deduplicator = DataDeduplicator()
-_deduplicator = DataDeduplicator()
 _logger = get_logger('google-map-spider')
 
 # 引入 httpx 和 BeautifulSoup 进行静态提取
