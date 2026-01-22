@@ -79,14 +79,51 @@
         }
 
         .main-content {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 6px;
+            display: flex;
+            gap: 2px;
             flex: 1;
             min-height: 0;
+            position: relative;
+        }
+
+        .resizer {
+            width: 12px;
+            cursor: col-resize;
+            flex-shrink: 0;
+            background: transparent;
+            transition: all 0.2s;
+            margin: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .resizer::after {
+            content: "";
+            width: 2px;
+            height: 40px;
+            background: rgba(245, 158, 11, 0.4);
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+
+        .resizer:hover,
+        .resizer.dragging {
+            background: rgba(245, 158, 11, 0.05);
+        }
+
+        .resizer:hover::after,
+        .resizer.dragging::after {
+            background: #f59e0b;
+            height: 100px;
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
         }
 
         .recipients-panel {
+            width: 280px;
+            min-width: 200px;
+            max-width: 500px;
             background: rgba(253, 242, 255, 0.9);
             backdrop-filter: blur(8px);
             border-radius: 10px;
@@ -95,9 +132,12 @@
             flex-direction: column;
             min-height: 0;
             border: 1px solid rgba(102, 126, 234, 0.1);
+            flex-shrink: 0;
         }
 
         .email-panel {
+            flex: 1;
+            min-width: 400px;
             background: rgba(253, 242, 255, 0.9);
             backdrop-filter: blur(8px);
             border-radius: 10px;
@@ -292,6 +332,7 @@
                     </div>
                 </div>
             </aside>
+            <div class="resizer" id="drag-bar"></div>
             <main class="email-panel">
                 <div class="panel-header">
                     <h3 class="panel-title">邮件内容</h3>
@@ -987,6 +1028,41 @@
     document.getElementById('ai-settings-modal').addEventListener('click', function (e) {
         if (e.target === this) {
             closeAISettings();
+        }
+    });
+
+    // 左右面板拖拽逻辑
+    const dragBar = document.getElementById('drag-bar');
+    const leftPanel = document.querySelector('.recipients-panel');
+    let isDragging = false;
+
+    dragBar.addEventListener('mousedown', function (e) {
+        isDragging = true;
+        dragBar.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        if (tinymce.activeEditor) {
+            document.querySelector('.tox-tinymce').style.pointerEvents = 'none';
+        }
+    });
+
+    document.addEventListener('mousemove', function (e) {
+        if (!isDragging) return;
+        const newWidth = e.clientX;
+        if (newWidth >= 200 && newWidth <= 550) {
+            leftPanel.style.width = newWidth + 'px';
+        }
+    });
+
+    document.addEventListener('mouseup', function () {
+        if (isDragging) {
+            isDragging = false;
+            dragBar.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            if (tinymce.activeEditor) {
+                document.querySelector('.tox-tinymce').style.pointerEvents = 'auto';
+            }
         }
     });
 </script>
